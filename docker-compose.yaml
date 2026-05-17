@@ -1,0 +1,26 @@
+services:
+  gateway:
+    build:
+      context: ./src/
+      dockerfile: gateway/Dockerfile
+    container_name: gateway
+    environment:
+    - SERVER_HOST=gateway
+    - SERVER_PORT=5678
+  client_0:
+    build:
+      context: ./src/
+      dockerfile: client/Dockerfile
+    container_name: client_0
+    depends_on:
+      - gateway
+    # - sum_0
+    # - sum_1
+    # - sum_2
+    environment:
+    - INPUT_FILE=/datasets/HI-Small_Trans.csv
+    - SERVER_HOST=gateway
+    - SERVER_PORT=5678
+    volumes:
+    - ./datasets:/datasets
+    - ./output:/output
