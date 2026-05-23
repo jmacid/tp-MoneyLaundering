@@ -2,6 +2,7 @@ import os
 from decimal import Decimal
 from datetime import datetime
 from domain.transaction import Transaction
+from middleware.middleware_rabbitmq import MessageMiddlewareExchangeRabbitMQ, MessageMiddlewareQueueRabbitMQ
 from operations.core.operation_factory import OperationFactory
 
 def build_operation():
@@ -43,9 +44,51 @@ def build_operation():
 
     return OperationFactory.create(operation_type, **params)
 
+def initialize_middleware(direction: str):
+    prefix = direction.upper()
+
+    rabbitmq_host = os.getenv("RABBITMQ_HOST", "localhost")
+    middleware_type = os.getenv(f"{prefix}_MIDDLEWARE_TYPE", "queue")
+
+    if middleware_type == "queue":
+        queue_name = os.getenv(f"{prefix}_QUEUE")
+
+        if queue_name is None:
+            raise ValueError(f"Missing environment variable: {prefix}_QUEUE")
+
+        return MessageMiddlewareQueueRabbitMQ(
+            host=rabbitmq_host,
+            queue_name=queue_name,
+        )
+
+    if middleware_type == "exchange":
+        exchange_name = os.getenv(f"{prefix}_EXCHANGE")
+        routing_keys_raw = os.getenv(f"{prefix}_ROUTING_KEYS", "")
+
+        if exchange_name is None:
+            raise ValueError(f"Missing environment variable: {prefix}_EXCHANGE")
+
+        routing_keys = [
+            key.strip()
+            for key in routing_keys_raw.split(",")
+            if key.strip()
+        ]
+
+        return MessageMiddlewareExchangeRabbitMQ(
+            host=rabbitmq_host,
+            exchange_name=exchange_name,
+            routing_keys=routing_keys,
+        )
+
+    raise ValueError(
+        f"Unsupported {prefix}_MIDDLEWARE_TYPE: {middleware_type}"
+    )
 
 def main():
     operation = build_operation()
+    
+    initialize_middleware("input")
+    initialize_middleware("output")
 
     transaction = Transaction(
         timestamp=datetime(2022, 9, 1, 10, 30),
