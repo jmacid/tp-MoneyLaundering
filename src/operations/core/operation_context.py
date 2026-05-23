@@ -1,3 +1,4 @@
+from typing import Any
 from domain.transaction import Transaction
 from operations.core import operation_strategy
 
@@ -9,5 +10,5 @@ class OperationContext:
     def set_strategy(self, strategy: operation_strategy) -> None:
         self._strategy = strategy
 
-    def execute(self, transaction: Transaction) -> bool:
+    def execute(self, transaction: dict[str, Any]) -> bool:
         return self._strategy.process(transaction)

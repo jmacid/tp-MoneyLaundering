@@ -1,16 +1,22 @@
 from decimal import Decimal
 from domain.exchange_rate import ExchangeRate
-from domain.transaction import Transaction
+
 
 class CurrencyNormalizer:
 
+    REQUIRED_FIELDS = {
+        "timestamp",
+        "amount_paid",
+        "payment_currency",
+        "amount_received",
+        "receiving_currency",
+    }
+
     def __init__(self, target_currency: str):
         self.target_currency = target_currency
-
         self.exchange_rates: dict[tuple[str, str, object], ExchangeRate] = {}
 
     def load_exchange_rate(self, exchange_rate: ExchangeRate) -> None:
-
         key = (
             exchange_rate.from_currency,
             exchange_rate.to_currency,
@@ -19,9 +25,12 @@ class CurrencyNormalizer:
 
         self.exchange_rates[key] = exchange_rate
 
-    def normalize_amount(self,
-        amount: Decimal, from_currency: str, rate_date) -> Decimal:
-
+    def normalize_amount(
+        self,
+        amount: Decimal,
+        from_currency: str,
+        rate_date,
+    ) -> Decimal:
         if from_currency == self.target_currency:
             return amount
 
@@ -33,46 +42,42 @@ class CurrencyNormalizer:
 
         exchange_rate = self.exchange_rates.get(key)
 
-        if not exchange_rate:
+        if exchange_rate is None:
             raise ValueError(
                 f"Exchange rate not found for "
-                f"{from_currency} -> "
-                f"{self.target_currency} "
-                f"({rate_date})"
+                f"{from_currency} -> {self.target_currency} ({rate_date})"
             )
 
         return amount * exchange_rate.rate
 
-    def normalize(self, transaction: Transaction) -> Transaction:
-            normalized_paid_amount = self.normalize_amount(
-                amount=transaction.amount_paid,
-                from_currency=transaction.payment_currency,
-                rate_date=transaction.timestamp.date(),
-            )
+    def process(self, transaction: dict) -> dict:
+        self._validate_payload(transaction)
 
-            normalized_received_amount = self.normalize_amount(
-                amount=transaction.amount_received,
-                from_currency=transaction.receiving_currency,
-                rate_date=transaction.timestamp.date(),
-            )
+        rate_date = transaction["timestamp"].date()
 
-            return Transaction(
-                timestamp=transaction.timestamp,
-                from_bank=transaction.from_bank,
-                from_account=transaction.from_account,
-                to_bank=transaction.to_bank,
-                to_account=transaction.to_account,
+        normalized_paid_amount = self.normalize_amount(
+            amount=transaction["amount_paid"],
+            from_currency=transaction["payment_currency"],
+            rate_date=rate_date,
+        )
 
-                amount_received=transaction.amount_received,
-                receiving_currency=transaction.receiving_currency,
+        normalized_received_amount = self.normalize_amount(
+            amount=transaction["amount_received"],
+            from_currency=transaction["receiving_currency"],
+            rate_date=rate_date,
+        )
 
-                amount_paid=transaction.amount_paid,
-                payment_currency=transaction.payment_currency,
+        return {
+            **transaction,
+            "normalized_amount_paid": normalized_paid_amount,
+            "normalized_amount_received": normalized_received_amount,
+            "normalized_currency": self.target_currency,
+        }
 
-                payment_format=transaction.payment_format,
-                is_laundering=transaction.is_laundering,
+    def _validate_payload(self, transaction: dict) -> None:
+        missing_fields = self.REQUIRED_FIELDS - transaction.keys()
 
-                normalized_amount_received=normalized_received_amount,
-                normalized_amount_paid=normalized_paid_amount,
-                normalized_currency=self.target_currency,
+        if missing_fields:
+            raise ValueError(
+                f"Missing required fields for CurrencyNormalizer: {missing_fields}"
             )
