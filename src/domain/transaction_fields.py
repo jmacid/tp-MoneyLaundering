@@ -1,0 +1,16 @@
+TRANSACTION_FIELDS = {
+    "timestamp",
+    "from_bank",
+    "from_account",
+    "to_bank",
+    "to_account",
+    "amount_received",
+    "receiving_currency",
+    "amount_paid",
+    "payment_currency",
+    "payment_format",
+    "is_laundering",
+    "normalized_amount_received",
+    "normalized_amount_paid",
+    "normalized_currency",
+}
