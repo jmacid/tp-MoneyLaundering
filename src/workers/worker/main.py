@@ -1,5 +1,8 @@
 import os
-from dispatchers import ExchangeDispatcher, ProjectionDispatcher, QueueDispatcher
+import logging
+from dispatchers.exchange_dispatcher import ExchangeDispatcher
+from dispatchers.projection_dispatcher import ProjectionDispatcher
+from dispatchers.queue_dispatcher import QueueDispatcher
 from operations.core.operation_factory import OperationFactory
 
 ALLOWED_OPERATIONS = ["currency_filter","amount_filter","date_range_filter","payment_method_filter",
@@ -43,12 +46,42 @@ def main():
         if isinstance(operation, ProjectionDispatcher)
         else initialize_dispatcher()
     )
+
+    logging.info(f"Initialized successfully operation: {os.getenv("OPERATION_TYPE")}")
     
     #transaction = input_middleware.consume()
-    result = None #operation.process(transaction)
+    transaction = {
+        "timestamp": "2026-05-24T15:30:00",
+
+        "from_bank": "GALICIA",
+        "from_account": "AR123456789",
+
+        "to_bank": "SANTANDER",
+        "to_account": "AR987654321",
+
+        "amount_received": "1250.75",
+        "receiving_currency": "USD",
+
+        "amount_paid": "1500000.00",
+        "payment_currency": "ARS",
+
+        "payment_format": "TRANSFER",
+
+        "is_laundering": False,
+
+        "normalized_amount_paid": "1250.75",
+        "normalized_amount_received": "1250.75",
+        "normalized_currency": "USD",
+    }
+
+    logging.info(f"Received transaction: {transaction}")
+
+    result = operation.process(transaction)
+
+    logging.info(f"Processed transaction: {result}")
 
     if dispatcher is not None and result is not None:
-        dispatcher.process(result)
+        dispatcher.process([result])
 
 
 if __name__ == "__main__":
