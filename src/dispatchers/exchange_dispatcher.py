@@ -1,5 +1,6 @@
+import os
 from typing import Any
-
+from domain.message_type import MessageType
 from middleware.middleware_rabbitmq import (
     MessageMiddlewareExchangeRabbitMQ,
 )
@@ -11,14 +12,14 @@ class ExchangeDispatcher:
 
         self.middleware = (
             MessageMiddlewareExchangeRabbitMQ(
-                host="rabbitmq",
+                host= os.getenv("RABBITMQ_HOST", "rabbitmq"),
                 exchange_name=exchange_name,
             )
         )
 
     def process(self, transaction: dict[str, Any], routing_key: str) -> None:
-
+        message = {"type": MessageType.TRANSACTION, **transaction}
         self.middleware.publish(
             routing_key=routing_key,
-            body=transaction,
+            body=message,
         )

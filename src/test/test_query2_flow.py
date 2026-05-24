@@ -2,7 +2,7 @@ import sys
 import os
 from unittest.mock import MagicMock
 
-# Mockear pika antes de cualquier import
+# Mock pika
 sys.modules['pika'] = MagicMock()
 
 from operations.projectors.field_projector import FieldProjector
@@ -42,7 +42,7 @@ print("\n=== Projected ===")
 for p in projected:
     print(p)
 
-# Paso 3: Bank Dispatcher (simulado, sin sharding real)
+# Paso 3: Bank Dispatcher (simulado, sin sharding)
 shards = {}
 for tx in projected:
     bank = tx.get("to_bank")

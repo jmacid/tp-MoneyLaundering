@@ -1,7 +1,7 @@
 import json
 import os
+from domain.message_type import MessageType
 from typing import Any
-
 from middleware.middleware_rabbitmq import MessageMiddlewareQueueRabbitMQ
 
 
@@ -35,6 +35,6 @@ class QueueDispatcher:
                 "Unexpected amount of transactions in QueueDispatcher",
                 f"transactions={len(transactions)} and expected={self.expected_transactions}"
             )
-
         for queue, transaction in zip(self.output_queues, transactions):
-            self.middlewares[queue].send(json.dumps(transaction))
+            message = {"type": MessageType.TRANSACTION, **transaction}
+            self.middlewares[queue].send(json.dumps(message))
