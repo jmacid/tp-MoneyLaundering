@@ -13,7 +13,8 @@ class FieldProjector(OperationStrategy):
         self.fields = fields
 
     def process(self, transaction) -> dict[str, Any] | None:
-        return {
-            field: getattr(transaction, field)
+        projected = {
+            field: transaction.get(field)
             for field in self.fields
         }
+        return projected
