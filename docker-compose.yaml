@@ -1,0 +1,13 @@
+services:
+  currency_filter:
+    build:
+      context: ./src/
+      dockerfile: workers/worker/Dockerfile
+    container_name: currency_filter
+    environment:
+      - SERVER_HOST=currency_filter
+      - SERVER_PORT=5678
+      - OPERATION_TYPE=currency_filter
+      - CURRENCY=USD
+      - INPUT_MIDDLEWARE_TYPE=queue
+      - INPUT_QUEUE=max_query

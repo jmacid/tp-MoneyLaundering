@@ -1,6 +1,8 @@
+from typing import Any
 from domain.transaction_fields import TRANSACTION_FIELDS
+from operations.core.operation_strategy import OperationStrategy
 
-class FieldProjector:
+class FieldProjector(OperationStrategy):
 
     def __init__(self, fields: list[str]):
         invalid_fields = set(fields) - TRANSACTION_FIELDS
@@ -10,7 +12,7 @@ class FieldProjector:
 
         self.fields = fields
 
-    def project(self, transaction) -> dict:
+    def process(self, transaction) -> dict[str, Any] | None:
         return {
             field: getattr(transaction, field)
             for field in self.fields

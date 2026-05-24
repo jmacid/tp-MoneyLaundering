@@ -10,5 +10,5 @@ class OperationContext:
     def set_strategy(self, strategy: operation_strategy) -> None:
         self._strategy = strategy
 
-    def execute(self, transaction: dict[str, Any]) -> bool:
+    def execute(self, transaction: dict[str, Any]) -> dict[str, Any] | None:
         return self._strategy.process(transaction)

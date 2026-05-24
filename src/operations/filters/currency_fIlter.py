@@ -1,13 +1,17 @@
+import os
+from typing import Any
 from operations.core.operation_strategy import OperationStrategy
-from domain.transaction import Transaction
 
 class CurrencyFilter(OperationStrategy):
 
-    def __init__(self, currency: str):
-        self.currency = currency
+    def __init__(self, currency: str | None = None):
+        self.currency = currency or os.getenv("CURRENCY")
 
-    def process(self, transaction: Transaction) -> bool:
-        return (
-            transaction.payment_currency == self.currency
-            or transaction.receiving_currency == self.currency
-        )
+        if not self.currency:
+            raise ValueError(
+                "Currency not provided and CURRENCY env var is not defined"
+            )
+
+    def process(self, transaction: dict[str, Any]) -> dict[str, Any] | None:
+        if transaction["payment_currency"] == self.currency or transaction["receiving_currency"] == self.currency:
+            return transaction

@@ -1,4 +1,8 @@
-class PaymentMethodCounter:
+from typing import Any
+from operations.core.operation_strategy import OperationStrategy
+
+
+class PaymentMethodCounter(OperationStrategy):
 
     REQUIRED_FIELDS = {
         "client_id",
@@ -8,7 +12,7 @@ class PaymentMethodCounter:
     def __init__(self):
         self.count = {}
 
-    def process(self, transaction: dict) -> None:
+    def process(self, transaction: dict[str, Any]) -> dict[str, Any] | None:
         self._validate_transaction(transaction)
 
         client_id = transaction["client_id"]

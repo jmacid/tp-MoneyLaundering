@@ -1,8 +1,11 @@
 from decimal import Decimal
+import os
+from typing import Any
 from domain.exchange_rate import ExchangeRate
+from operations.core.operation_strategy import OperationStrategy
 
 
-class CurrencyNormalizer:
+class CurrencyNormalizer(OperationStrategy):
 
     REQUIRED_FIELDS = {
         "timestamp",
@@ -12,8 +15,12 @@ class CurrencyNormalizer:
         "receiving_currency",
     }
 
-    def __init__(self, target_currency: str):
-        self.target_currency = target_currency
+    def __init__(self, target_currency: str | None = None):
+        self.target_currency = target_currency or os.getenv("TARGET_CURRENCY")
+
+        if self.target_currency is None:
+            raise ValueError("Missing TARGET_CURRENCY")
+
         self.exchange_rates: dict[tuple[str, str, object], ExchangeRate] = {}
 
     def load_exchange_rate(self, exchange_rate: ExchangeRate) -> None:
@@ -50,7 +57,7 @@ class CurrencyNormalizer:
 
         return amount * exchange_rate.rate
 
-    def process(self, transaction: dict) -> dict:
+    def process(self, transaction: dict[str, Any]) -> dict[str, Any] | None:
         self._validate_payload(transaction)
 
         rate_date = transaction["timestamp"].date()
