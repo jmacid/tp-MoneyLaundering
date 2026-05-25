@@ -1,5 +1,5 @@
 from typing import Any
-from dispatchers.queue_dispatcher import QueueDispatcher
+from workers.dispatchers.queue_dispatcher import QueueDispatcher
 from operations.projectors.field_projector import FieldProjector
 
 Q_1 = ["timestamp", "from_account","to_account","amount_paid"]

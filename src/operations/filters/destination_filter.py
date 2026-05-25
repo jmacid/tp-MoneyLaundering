@@ -1,17 +1,13 @@
+from collections import defaultdict
 from decimal import Decimal
 import logging
 from numbers import Number
 import os
 from typing import Any
 from operations.core.operation_strategy import OperationStrategy
+from shared.validators.transaction_validator import TransactionValidator
 
 class DestinationFilter(OperationStrategy):
-
-    REQUIRED_FIELDS = {
-        #"client_id", only for demo
-        "from_account",
-        "to_account",
-    }
 
     def __init__(self, required_accounts: Number | None = None):
 
@@ -22,23 +18,18 @@ class DestinationFilter(OperationStrategy):
         
         self.destination_required_acc = required_accounts or Decimal(required_accounts_raw)
 
-        self.count = {}
+        self.count: dict[str, dict[str, set[str]]] = defaultdict(lambda: defaultdict(set))
+        self.required_fields = {"from_account", "to_account"} #"client_id", only for demo
 
     def process(self, transaction: dict[str, Any]) -> dict[str, Any] | None:
 
-        self._validate_transaction(transaction)
+        TransactionValidator.validate_required_fields(transaction, self.required_fields)
 
         client_id = "Hardcoded for demo" # transaction["client_id"] for DEMO
         from_account = transaction["from_account"]
         to_account = transaction["to_account"]
 
         logging.info(f"Processing client <<{client_id}>> from account <<{from_account}>>")
-
-        if client_id not in self.count:
-            self.count[client_id] = {}
-
-        if from_account not in self.count[client_id]:
-            self.count[client_id][from_account] = set()
 
         self.count[client_id][from_account].add(to_account)
 
@@ -48,11 +39,3 @@ class DestinationFilter(OperationStrategy):
         if (len(self.count[client_id][from_account])) >= self.destination_required_acc:
             return {"from_account": from_account}
         return None
-
-    def _validate_transaction(self, transaction: dict) -> None:
-        missing_fields = self.REQUIRED_FIELDS - transaction.keys()
-
-        if missing_fields:
-            raise ValueError(
-                f"Missing required fields: {missing_fields}"
-            )        
