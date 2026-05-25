@@ -1,10 +1,10 @@
 import os
 import logging
-from consumers.exchange_consumer import ExchangeConsumer
-from consumers.queue_consumer import QueueConsumer
-from dispatchers.exchange_dispatcher import ExchangeDispatcher
-from dispatchers.projection_dispatcher import ProjectionDispatcher
-from dispatchers.queue_dispatcher import QueueDispatcher
+from workers.consumers.exchange_consumer import ExchangeConsumer
+from workers.consumers.queue_consumer import QueueConsumer
+from workers.dispatchers.exchange_dispatcher import ExchangeDispatcher
+from workers.dispatchers.projection_dispatcher import ProjectionDispatcher
+from workers.dispatchers.queue_dispatcher import QueueDispatcher
 from operations.core.operation_factory import OperationFactory
 
 ALLOWED_OPERATIONS = ["currency_filter","amount_filter","date_range_filter","payment_method_filter",

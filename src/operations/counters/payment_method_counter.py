@@ -1,20 +1,19 @@
+from collections import defaultdict
 import logging
 from typing import Any
 from operations.core.operation_strategy import OperationStrategy
-
+from shared.validators.transaction_validator import TransactionValidator
 
 class PaymentMethodCounter(OperationStrategy):
 
-    REQUIRED_FIELDS = {
-        #"client_id", only for demo
-        "payment_format",
-    }
-
     def __init__(self):
-        self.count = {}
+
+        self.count: dict[str, dict[str, int]] = defaultdict(lambda: defaultdict(int))
+        self.required_fields = {"payment_format"} #"client_id", only for demo
 
     def process(self, transaction: dict[str, Any]) -> dict[str, Any] | None:
-        self._validate_transaction(transaction)
+
+        TransactionValidator.validate_required_fields(transaction, self.required_fields)
 
         client_id = "Hardcoded for demo" # transaction["client_id"] for DEMO
         payment_method = transaction["payment_format"]
@@ -29,16 +28,4 @@ class PaymentMethodCounter(OperationStrategy):
 
         self.count[client_id][payment_method] += 1
 
-        logging.info(f"Client={client_id} Payment={payment_method} Count {self.count[client_id][payment_method]}")
-
-    def _validate_transaction(self, transaction: dict) -> None:
-        missing_fields = self.REQUIRED_FIELDS - transaction.keys()
-
-        if missing_fields:
-            raise ValueError(
-                f"Missing required fields: {missing_fields}"
-            )
-
-    def get_count(self):
-        return self.count
-        
+        logging.info(f"Client={client_id} Payment={payment_method} Count {self.count[client_id][payment_method]}")        
