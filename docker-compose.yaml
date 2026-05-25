@@ -97,3 +97,19 @@ services:
       - OUTPUT_MIDDLEWARE_TYPE=queue
       - OUTPUTS=minor_transactions
       - MINIMUM_AMOUNT=1
+
+  payment_method_counter:
+    build:
+      context: ./src/
+      dockerfile: workers/worker/Dockerfile
+    container_name: payment_method_counter
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    environment:
+      - RABBITMQ_HOST=rabbitmq
+      - OPERATION_TYPE=payment_method_counter
+      - INPUT_MIDDLEWARE_TYPE=queue
+      - INPUT_QUEUE=minor_transactions
+      - OUTPUT_MIDDLEWARE_TYPE=queue
+      - OUTPUTS=count_transactions
