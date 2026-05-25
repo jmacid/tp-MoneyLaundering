@@ -9,15 +9,11 @@ Obtener el nombre de banco, cuenta de origen y monto de la máxima transacción 
 
 ### Flujo de datos
 
-Gateway --> (transaction) --> Currency Filter --> (USD_Transactions) --> Projection Dispatcher --> (projection_transactions) --> Bank Dispatcher --> (bank_shards) --> Local Bank Max Aggregator --> (max_bank_transactions) y (bankname_shards)--> Bank resolver --> (bank_max_transactions) --> Gateway
+Gateway --> (transaction) --> Projection Dispatcher --> (max_query) --> Current Filter --> (USD_transactions) --> Bank Dispatcher --> (bank_shards) --> Local Bank Max Aggregator --> (max_bank_transactions) y (bankname_shards)--> Bank resolver --> (bank_max_transactions) --> Gateway
 
 ---
 
 ### Decisiones de diseño
-
-**Currency Filter antes de Projection Dispatcher**
-
-El filtro de moneda requiere acceder a `payment_currency` y `receiving_currency`. Si se proyectara primero, estos campos se perderían y habría que incluirlos en la proyección de Query 2 únicamente para descartarlos después. Filtrando primero se reduce además el volumen de mensajes que llegan al Projection Dispatcher.
 
 **Eliminación de Bank Max Aggregator y Bank Max Joiner**
 
