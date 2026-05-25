@@ -32,12 +32,9 @@ class CurrencyNormalizer(OperationStrategy):
 
         self.exchange_rates[key] = exchange_rate
 
-    def normalize_amount(
-        self,
-        amount: Decimal,
-        from_currency: str,
-        rate_date,
-    ) -> Decimal:
+    def normalize_amount(self, amount: Decimal, from_currency: str, rate_date) -> Decimal:
+
+        return amount # for DEMO
         if from_currency == self.target_currency:
             return amount
 
@@ -58,6 +55,14 @@ class CurrencyNormalizer(OperationStrategy):
         return amount * exchange_rate.rate
 
     def process(self, transaction: dict[str, Any]) -> dict[str, Any] | None:
+        #for DEMO
+        return {
+            **transaction,
+            "normalized_amount_paid": 1000,
+            "normalized_amount_received": 1000,
+            "normalized_currency": self.target_currency,
+        }
+    
         self._validate_payload(transaction)
 
         rate_date = transaction["timestamp"].date()

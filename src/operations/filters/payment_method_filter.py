@@ -6,12 +6,26 @@ from domain.transaction import Transaction
 
 class PaymentMethodFilter(OperationStrategy):
 
-    def __init__(self, payment_method: str | None = None):
-        self.payment_method = payment_method or os.getenv("PAYMENT_METHOD")
+    def __init__(self, payment_methods: list[str] | None = None):
 
-        if self.payment_method is None:
-            raise ValueError("Missing PAYMENT_METHOD")
+        payment_methods_raw = os.getenv(
+            "PAYMENT_METHODS"
+        )
+
+        if payment_methods is None and not payment_methods_raw:
+            raise ValueError(
+                "Missing PAYMENT_METHODS"
+            )
+
+        self.payment_methods = (
+            payment_methods
+            or [
+                py.strip()
+                for py in payment_methods_raw.split(",")
+                if py.strip()
+            ]
+        )
 
     def process(self, transaction: dict[str, Any]) -> dict[str, Any] | None:
-        if transaction["payment_format"] == self.payment_method:
+        if (transaction["payment_format"] in self.payment_methods):
             return transaction
