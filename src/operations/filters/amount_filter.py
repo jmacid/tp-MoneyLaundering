@@ -1,6 +1,7 @@
 from decimal import Decimal
 import os
 from typing import Any
+import logging
 from operations.core.operation_strategy import OperationStrategy
 
 class AmountFilter(OperationStrategy):
@@ -12,5 +13,7 @@ class AmountFilter(OperationStrategy):
             raise ValueError("Missing environment variable: MINIMUM_AMOUNT")
 
     def process(self, transaction: dict[str, Any]) -> dict[str, Any] | None:
-        if transaction["amount_paid"] >= self.minimum_amount:
+
+        logging.info(f"Comparing {transaction["amount_paid"]} with {self.minimum_amount}")
+        if Decimal(transaction["amount_paid"]) >= self.minimum_amount:
             return transaction
