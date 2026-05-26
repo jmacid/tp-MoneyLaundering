@@ -4,6 +4,7 @@ import socket
 import signal
 import csv
 from common import message_protocol
+from itertools import islice
 
 SERVER_HOST = os.environ["SERVER_HOST"]
 SERVER_PORT = int(os.environ["SERVER_PORT"])
@@ -32,17 +33,10 @@ class Client:
     
     def send_transaction_records(self, input_file):
         logging.info("[send_transaction_records] Sending transaction records")
-        limit = 2 # BORRAR LIMIT
-        i = 0 # BORRAR LIMIT
         with open(input_file, newline="\n") as csvfile:
             csv_reader = csv.reader(csvfile, delimiter=",", quotechar='"')
             header = next(csv_reader)
-            for row in csv_reader:
-                # [fruit, amount] = row
-                i += 1
-                logging.info(f"[send_transaction_records] i: {i}")
-                if i >= limit:
-                    break
+            for row in islice(csv_reader, 5):
                 message_protocol.external.send_msg(
                     self.server_socket,
                     message_protocol.external.MsgType.TRANSACTION_RECORD,
@@ -52,12 +46,12 @@ class Client:
                 msg_0, msg_1 = message_protocol.external.recv_msg(self.server_socket)
                 logging.info(f"[send_transaction_records]: recv f: {msg_0} - {msg_1}")
 
-        logging.info("[send_fruit_records]: END_OF_RECODS i")
-        # message_protocol.external.send_msg(
-        #     self.server_socket, message_protocol.external.MsgType.END_OF_RECODS
-        # )
-        # message_protocol.external.recv_msg(self.server_socket)
-        logging.info("[send_fruit_records]: END_OF_RECODS f")
+        logging.info("[send_transaction_records]: END_OF_RECODS i")
+        message_protocol.external.send_msg(
+            self.server_socket, message_protocol.external.MsgType.END_OF_RECODS
+        )
+        message_protocol.external.recv_msg(self.server_socket)
+        logging.info("[send_transaction_records]: END_OF_RECODS f")
 
 def main() -> int:
     logging.basicConfig(level=logging.INFO)

@@ -4,7 +4,14 @@ services:
       context: ./src/
       dockerfile: gateway/Dockerfile
     container_name: gateway
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
     environment:
+    - INPUT_QUEUE=results_queue
+    - MOM_HOST=rabbitmq
+    - OUTPUT_QUEUE=input_queue
+    - PYTHONUNBUFFERED=1
     - SERVER_HOST=gateway
     - SERVER_PORT=5678
   client_0:
@@ -14,9 +21,6 @@ services:
     container_name: client_0
     depends_on:
       - gateway
-    # - sum_0
-    # - sum_1
-    # - sum_2
     environment:
     - INPUT_FILE=/datasets/HI-Small_Trans.csv
     - SERVER_HOST=gateway
@@ -24,3 +28,19 @@ services:
     volumes:
     - ./datasets:/datasets
     - ./output:/output
+  rabbitmq:
+    build:
+      context: ./src/rabbitmq
+      dockerfile: Dockerfile
+    container_name: rabbitmq
+    environment:
+    - RABBITMQ_LOG_LEVELS=error
+    healthcheck:
+      interval: 5s
+      retries: 10
+      start_period: 50s
+      test: rabbitmq-diagnostics check_port_connectivity
+      timeout: 3s
+    ports:
+    - 5672:5672
+    - 15672:15672

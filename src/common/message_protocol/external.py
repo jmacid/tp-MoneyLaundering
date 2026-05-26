@@ -54,7 +54,6 @@ def _recv_transaction_record(socket):
     is_laundering = external_serializer.deserialize_bool(
         _recv_sized(socket, external_serializer.BOOL_SIZE)
     )
-    
     return (
         timestamp, from_bank, from_account, to_bank, to_account, 
         amount_received, receiving_currency, amount_paid, 
