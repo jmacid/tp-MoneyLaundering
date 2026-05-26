@@ -18,7 +18,10 @@ ALLOWED_OPERATIONS = [
     "payment_method_filter",
     "payment_method_counter",
     "currency_normalizer",
-    "projection_dispatcher"
+    "projection_dispatcher",
+    "bank_dispatcher",
+    "local_bank_max_aggregator",
+    "bank_resolver"
 ]
 
 running = True

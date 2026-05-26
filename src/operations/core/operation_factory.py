@@ -1,9 +1,13 @@
 from operations.counters.payment_method_counter import PaymentMethodCounter
 from operations.filters.amount_filter import AmountFilter
-from operations.filters.currency_fIlter import CurrencyFilter
+from operations.filters.currency_filter import CurrencyFilter
 from operations.filters.date_range_filter import DateRangeFilter
 from operations.filters.payment_method_filter import PaymentMethodFilter
 from operations.normalizers.currency_normalizer import CurrencyNormalizer
+from operations.aggregators.local_bank_max_aggregator import LocalBankMaxAggregator
+from operations.resolver.bank_resolver import BankResolver
+from dispatchers.projection_dispatcher import ProjectionDispatcher
+from dispatchers.bank_dispatcher import BankDispatcher
 
 class OperationFactory:
 
@@ -17,7 +21,10 @@ class OperationFactory:
             "payment_method_filter": PaymentMethodFilter,
             "payment_method_counter": PaymentMethodCounter,
             "currency_normalizer": CurrencyNormalizer,
-            #"projector_dispatcher": PaymentMethodFilter,
+            "projection_dispatcher": ProjectionDispatcher,  
+            "bank_dispatcher": BankDispatcher,  
+            "local_bank_max_aggregator": LocalBankMaxAggregator,  
+            "bank_resolver": BankResolver,
         }
 
         operation_class = operations.get(operation_type)
