@@ -6,6 +6,7 @@ import multiprocessing
 import message_handler
 from common import middleware, message_protocol
 import uuid
+import json
 
 SERVER_HOST = os.environ["SERVER_HOST"]
 SERVER_PORT = int(os.environ["SERVER_PORT"])
@@ -13,15 +14,17 @@ SERVER_PORT = int(os.environ["SERVER_PORT"])
 MOM_HOST = os.environ["MOM_HOST"]
 INPUT_QUEUE = os.environ["INPUT_QUEUE"]
 OUTPUT_QUEUE = os.environ["OUTPUT_QUEUE"]
+EOF_HANDLER_QUEUE = os.environ["EOF_HANDLER_QUEUE"]
 
 
 def handle_client_request(client_socket, message_handler):
     output_queue = middleware.MessageMiddlewareQueueRabbitMQ(MOM_HOST, OUTPUT_QUEUE)
+    eof_queue = middleware.MessageMiddlewareQueueRabbitMQ(MOM_HOST, EOF_HANDLER_QUEUE)
 
     try:
         while True:
             message = message_protocol.external.recv_msg(client_socket)
-            
+
             if message[0] == message_protocol.external.MsgType.TRANSACTION_RECORD:
                 serialized_message = message_handler.serialize_data_message(message[1])
                 output_queue.send(serialized_message)
@@ -32,7 +35,7 @@ def handle_client_request(client_socket, message_handler):
             if message[0] == message_protocol.external.MsgType.END_OF_RECODS:
                 logging.info(f"End of records: {message[1]}")
                 serialized_message = message_handler.serialize_eof_message(message[1])
-                output_queue.send(serialized_message)
+                eof_queue.send(serialized_message)
                 message_protocol.external.send_msg(
                     client_socket, message_protocol.external.MsgType.ACK
                 )
@@ -43,6 +46,7 @@ def handle_client_request(client_socket, message_handler):
         logging.error(e)
     finally:
         output_queue.close()
+        eof_queue.close()  
 
 
 def handle_client_response(client_list):
@@ -50,17 +54,11 @@ def handle_client_response(client_list):
 
     def _consume_result(message, ack, nack):
         try:
-            fields = message_protocol.internal.deserialize(message)
+            result = json.loads(message.decode("utf-8"))
+            target_client_id = result.get("client_id")
 
-            if len(fields) != 2:
-                ack()
-                return
-
-            target_client_id = fields[0]
-            # fruit_top = fields[1]
-
-            client_index = -1
             target_socket = None
+            client_index = -1
 
             for idx, client_data in enumerate(client_list):
                 if client_data[0] == target_client_id:
@@ -68,27 +66,26 @@ def handle_client_response(client_list):
                     target_socket = client_data[2]
                     break
 
-            # if target_socket:
-            #     logging.info(f"[_consume_result] Enviando FRUIT_TOP al cliente {target_client_id[:8]}")
-            #     message_protocol.external.send_msg(
-            #         target_socket,
-            #         message_protocol.external.MsgType.FRUIT_TOP,
-            #         fruit_top,
-            #     )
-            #     message_protocol.external.recv_msg(target_socket)
-            #     client_list.pop(client_index)
-            # else:
-            #     logging.warning(f"[_consume_result] Socket no encontrado para el cliente {target_client_id[:8]}")
+            if target_socket:
+                logging.info(f"Sending result to client {target_client_id[:8]}: {result}")
+                # TODO: serializar y mandar resultado al cliente por TCP
+                # message_protocol.external.send_msg(
+                #     target_socket,
+                #     message_protocol.external.MsgType.QUERY_RESULT,
+                #     result
+                # )
+            else:
+                logging.warning(f"Socket not found for client {target_client_id[:8]}")
 
             ack()
 
         except socket.error:
-            logging.error("[_consume_result] Se perdio la conexion con el cliente")
+            logging.error("Connection lost with client")
             if client_index != -1:
                 client_list.pop(client_index)
             ack()
         except Exception as e:
-            logging.error(f"[_consume_result] Error inesperado en: {e}")
+            logging.error(f"Unexpected error: {e}")
             nack()
             input_queue.stop_consuming()
 
