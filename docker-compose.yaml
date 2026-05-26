@@ -164,3 +164,34 @@ services:
       - START_DATE=2026-01-01T00:00:00
       - END_DATE=2026-12-31T23:59:59
       - EOF_HANDLER_QUEUE=eof_handler
+
+# ───── Gateway ────────────────────────────────────────────────────────────────────────────
+  gateway:
+    build:
+      context: ./src/
+      dockerfile: gateway/Dockerfile
+    container_name: gateway
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    environment:
+    - INPUT_QUEUE=results_queue
+    - MOM_HOST=rabbitmq
+    - OUTPUT_QUEUE=input_queue
+    - PYTHONUNBUFFERED=1
+    - SERVER_HOST=gateway
+    - SERVER_PORT=5678
+  client_0:
+    build:
+      context: ./src/
+      dockerfile: client/Dockerfile
+    container_name: client_0
+    depends_on:
+      - gateway
+    environment:
+    - INPUT_FILE=/datasets/HI-Small_Trans.csv
+    - SERVER_HOST=gateway
+    - SERVER_PORT=5678
+    volumes:
+    - ./datasets:/datasets
+    - ./output:/output
