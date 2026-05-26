@@ -16,7 +16,7 @@ class LocalBankMaxAggregator:
 
     def update_max(self, transaction: dict) -> None:
         client_id = transaction.get("client_id")
-        bank = transaction.get("to_bank")
+        bank = transaction.get("from_bank")
         amount = transaction.get("amount_paid", 0)
 
         if client_id not in self.max_amounts:

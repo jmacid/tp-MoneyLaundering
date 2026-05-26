@@ -27,6 +27,6 @@ class BankDispatcher:
         return self.shards[index]
 
     def process(self, transaction: dict[str, Any]) -> None:
-        shard_queue = self._get_shard(transaction["to_bank"])
+        shard_queue = self._get_shard(transaction["from_bank"])
         message = {"type": MessageType.TRANSACTION, **transaction}
         self.middlewares[shard_queue].send(json.dumps(message))

@@ -13,5 +13,5 @@ class CurrencyFilter(OperationStrategy):
             )
 
     def process(self, transaction: dict[str, Any]) -> dict[str, Any] | None:
-        if transaction["payment_currency"] == self.currency or transaction["receiving_currency"] == self.currency:
+        if transaction["payment_currency"] == self.currency:
             return transaction

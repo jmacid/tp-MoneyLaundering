@@ -27,7 +27,124 @@ services:
       - OPERATION_TYPE=projection_dispatcher
       - INPUT_MIDDLEWARE_TYPE=queue
       - INPUT_QUEUE=transactions
-      - OUTPUTS=count_query,date_range_query,q3_query,q4_query,q5_query
+      - OUTPUTS=q1_transactions,q2_transactions,q3_transactions,q4_transactions,q5_transactions
+      - EOF_HANDLER_QUEUE=eof_handler
+
+  # ── Query 2 ──────────────────────────────────────────────
+
+  currency_filter_q2:
+    build:
+      context: ./src/
+      dockerfile: workers/worker/Dockerfile
+    deploy:
+      replicas: 3
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    environment:
+      - RABBITMQ_HOST=rabbitmq
+      - OPERATION_TYPE=currency_filter
+      - INPUT_MIDDLEWARE_TYPE=queue
+      - INPUT_QUEUE=q2_transactions
+      - OUTPUT_MIDDLEWARE_TYPE=queue
+      - OUTPUTS=USD_transactions_q2
+      - CURRENCY=US Dollar
+      - EOF_HANDLER_QUEUE=eof_handler
+
+  bank_dispatcher_q2:
+    build:
+      context: ./src/
+      dockerfile: workers/worker/Dockerfile
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    environment:
+      - RABBITMQ_HOST=rabbitmq
+      - OPERATION_TYPE=bank_dispatcher
+      - INPUT_MIDDLEWARE_TYPE=queue
+      - INPUT_QUEUE=USD_transactions_q2
+      - OUTPUTS=bank_shard_1,bank_shard_2,bank_shard_3
+      - EOF_HANDLER_QUEUE=eof_handler
+
+  local_bank_max_aggregator_1:
+    build:
+      context: ./src/
+      dockerfile: workers/worker/Dockerfile
+    container_name: local_bank_max_aggregator_1
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    environment:
+      - RABBITMQ_HOST=rabbitmq
+      - OPERATION_TYPE=local_bank_max_aggregator
+      - INPUT_MIDDLEWARE_TYPE=queue
+      - INPUT_QUEUE=bank_shard_1
+      - OUTPUT_QUEUE=max_bank_transactions
+      - EOF_HANDLER_QUEUE=eof_handler
+
+  local_bank_max_aggregator_2:
+    build:
+      context: ./src/
+      dockerfile: workers/worker/Dockerfile
+    container_name: local_bank_max_aggregator_2
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    environment:
+      - RABBITMQ_HOST=rabbitmq
+      - OPERATION_TYPE=local_bank_max_aggregator
+      - INPUT_MIDDLEWARE_TYPE=queue
+      - INPUT_QUEUE=bank_shard_2
+      - OUTPUT_QUEUE=max_bank_transactions
+      - EOF_HANDLER_QUEUE=eof_handler
+
+  local_bank_max_aggregator_3:
+    build:
+      context: ./src/
+      dockerfile: workers/worker/Dockerfile
+    container_name: local_bank_max_aggregator_3
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    environment:
+      - RABBITMQ_HOST=rabbitmq
+      - OPERATION_TYPE=local_bank_max_aggregator
+      - INPUT_MIDDLEWARE_TYPE=queue
+      - INPUT_QUEUE=bank_shard_3
+      - OUTPUT_QUEUE=max_bank_transactions
+      - EOF_HANDLER_QUEUE=eof_handler
+
+  bank_resolver:
+    build:
+      context: ./src/
+      dockerfile: workers/worker/Dockerfile
+    container_name: bank_resolver
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    environment:
+      - RABBITMQ_HOST=rabbitmq
+      - OPERATION_TYPE=bank_resolver
+      - INPUT_MIDDLEWARE_TYPE=queue
+      - INPUT_QUEUE=max_bank_transactions
+      - OUTPUT_QUEUE=bank_max_transactions
+      - EOF_HANDLER_QUEUE=eof_handler
+
+  eof_handler:
+    build:
+      context: ./src/
+      dockerfile: eof_handler/Dockerfile
+    container_name: eof_handler
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    environment:
+      - RABBITMQ_HOST=rabbitmq
+      - EOF_HANDLER_QUEUE=eof_handler
+      - GATEWAY_QUEUE=gateway
+      - PIPELINE_CONFIG=eof_handler/pipeline_config.yaml
+
+  # ───────────────────────────────────────
 
   date_range_filter:
     build:
@@ -46,3 +163,4 @@ services:
       - OUTPUTS=range_transactions
       - START_DATE=2026-01-01T00:00:00
       - END_DATE=2026-12-31T23:59:59
+      - EOF_HANDLER_QUEUE=eof_handler

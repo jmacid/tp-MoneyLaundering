@@ -13,9 +13,9 @@ def test_single_client():
     aggregator = LocalBankMaxAggregator()
     aggregator.middleware = MagicMock()  # mockear el middleware
 
-    aggregator.process({"client_id": "client_1", "to_bank": "bank_1", "from_account": "ACC1", "amount_paid": 100.0})
-    aggregator.process({"client_id": "client_1", "to_bank": "bank_1", "from_account": "ACC2", "amount_paid": 200.0})
-    aggregator.process({"client_id": "client_1", "to_bank": "bank_2", "from_account": "ACC3", "amount_paid": 50.0})
+    aggregator.process({"client_id": "client_1", "from_bank": "bank_1", "from_account": "ACC1", "amount_paid": 100.0})
+    aggregator.process({"client_id": "client_1", "from_bank": "bank_1", "from_account": "ACC2", "amount_paid": 200.0})
+    aggregator.process({"client_id": "client_1", "from_bank": "bank_2", "from_account": "ACC3", "amount_paid": 50.0})
 
     aggregator.flush("client_1")
 
@@ -33,10 +33,10 @@ def test_multiple_clients_isolated():
     aggregator.middleware = MagicMock()
 
     # client_1 y client_2 intercalados
-    aggregator.process({"client_id": "client_1", "to_bank": "bank_1", "from_account": "ACC1", "amount_paid": 100.0})
-    aggregator.process({"client_id": "client_2", "to_bank": "bank_1", "from_account": "ACC3", "amount_paid": 500.0})
-    aggregator.process({"client_id": "client_1", "to_bank": "bank_1", "from_account": "ACC2", "amount_paid": 200.0})
-    aggregator.process({"client_id": "client_2", "to_bank": "bank_1", "from_account": "ACC4", "amount_paid": 300.0})
+    aggregator.process({"client_id": "client_1", "from_bank": "bank_1", "from_account": "ACC1", "amount_paid": 100.0})
+    aggregator.process({"client_id": "client_2", "from_bank": "bank_1", "from_account": "ACC3", "amount_paid": 500.0})
+    aggregator.process({"client_id": "client_1", "from_bank": "bank_1", "from_account": "ACC2", "amount_paid": 200.0})
+    aggregator.process({"client_id": "client_2", "from_bank": "bank_1", "from_account": "ACC4", "amount_paid": 300.0})
 
     # Flush client_1
     aggregator.flush("client_1")
@@ -65,9 +65,9 @@ def test_max_is_correct():
     aggregator = LocalBankMaxAggregator()
     aggregator.middleware = MagicMock()
 
-    aggregator.process({"client_id": "client_1", "to_bank": "bank_1", "from_account": "ACC1", "amount_paid": 100.0})
-    aggregator.process({"client_id": "client_1", "to_bank": "bank_1", "from_account": "ACC2", "amount_paid": 999.0})
-    aggregator.process({"client_id": "client_1", "to_bank": "bank_1", "from_account": "ACC3", "amount_paid": 50.0})
+    aggregator.process({"client_id": "client_1", "from_bank": "bank_1", "from_account": "ACC1", "amount_paid": 100.0})
+    aggregator.process({"client_id": "client_1", "from_bank": "bank_1", "from_account": "ACC2", "amount_paid": 999.0})
+    aggregator.process({"client_id": "client_1", "from_bank": "bank_1", "from_account": "ACC3", "amount_paid": 50.0})
 
     aggregator.flush("client_1")
 

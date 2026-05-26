@@ -27,7 +27,7 @@ class BankResolver:
 
     def process(self, transaction: dict[str, Any]) -> None:
         client_id = transaction.get("client_id")
-        bank_id = transaction.get("to_bank")
+        bank_id = transaction.get("from_bank") 
         bank_name = self.bank_names.get(client_id, {}).get(bank_id)
 
         if not bank_name:

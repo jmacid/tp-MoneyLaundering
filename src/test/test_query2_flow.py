@@ -7,14 +7,14 @@ from operations.filters.currency_filter import CurrencyFilter
 
 # Transacciones de prueba
 transactions = [
-    {"from_account": "ACC1", "to_bank": "bank_1", "to_account": "ACC2",
-     "amount_paid": 100.0, "payment_currency": "USD", "receiving_currency": "USD"},
-    {"from_account": "ACC3", "to_bank": "bank_1", "to_account": "ACC4",
-     "amount_paid": 200.0, "payment_currency": "USD", "receiving_currency": "USD"},
-    {"from_account": "ACC5", "to_bank": "bank_2", "to_account": "ACC6",
-     "amount_paid": 50.0,  "payment_currency": "EUR", "receiving_currency": "USD"},
-    {"from_account": "ACC7", "to_bank": "bank_2", "to_account": "ACC8",
-     "amount_paid": 300.0, "payment_currency": "USD", "receiving_currency": "USD"},
+    {"from_account": "ACC1", "from_bank": "bank_1", "to_account": "ACC2",
+     "amount_paid": 100.0, "payment_currency": "US Dollar", "receiving_currency": "US Dollar"},
+    {"from_account": "ACC3", "from_bank": "bank_1", "to_account": "ACC4",
+     "amount_paid": 200.0, "payment_currency": "US Dollar", "receiving_currency": "US Dollar"},
+    {"from_account": "ACC5", "from_bank": "bank_2", "to_account": "ACC6",
+     "amount_paid": 50.0,  "payment_currency": "EUR", "receiving_currency": "US Dollar"},
+    {"from_account": "ACC7", "from_bank": "bank_2", "to_account": "ACC8",
+     "amount_paid": 300.0, "payment_currency": "US Dollar", "receiving_currency": "US Dollar"},
 ]
 
 bank_names = {
@@ -23,7 +23,7 @@ bank_names = {
 }
 
 # Paso 1: Projection (primero, separa ramas)
-Q_2 = ["from_account", "to_bank", "amount_paid", "payment_currency", "receiving_currency"]
+Q_2 = ["from_account", "from_bank", "amount_paid", "payment_currency", "receiving_currency"]
 projector = FieldProjector(Q_2)
 projected = [projector.process(tx) for tx in transactions]
 print("=== Projected ===")
@@ -31,7 +31,7 @@ for p in projected:
     print(p)
 
 # Paso 2: Currency Filter
-currency_filter = CurrencyFilter(currency="USD")
+currency_filter = CurrencyFilter(currency="US Dollar")
 filtered = [tx for tx in projected if currency_filter.process(tx)]
 print("\n=== Currency Filtered ===")
 for f in filtered:
@@ -40,7 +40,7 @@ for f in filtered:
 # Paso 3: Bank Dispatcher (simulado, sin sharding)
 shards = {}
 for tx in filtered:
-    bank = tx.get("to_bank")
+    bank = tx.get("from_bank")
     if bank not in shards:
         shards[bank] = []
     shards[bank].append(tx)
@@ -51,11 +51,11 @@ for bank, txs in shards.items():
 # Paso 4: Local Bank Max Aggregator (simulado sin middleware)
 max_per_bank = {}
 for tx in filtered:
-    bank = tx.get("to_bank")
+    bank = tx.get("from_bank")
     amount = tx.get("amount_paid", 0)
     if bank not in max_per_bank or amount > max_per_bank[bank]["max_amount"]:
         max_per_bank[bank] = {
-            "to_bank": bank,
+            "from_bank": bank,
             "from_account": tx.get("from_account"),
             "max_amount": amount
         }
