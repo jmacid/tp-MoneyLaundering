@@ -57,4 +57,4 @@ services:
       - OPERATION_TYPE=projection_dispatcher
       - INPUT_MIDDLEWARE_TYPE=queue
       - INPUT_QUEUE=transactions
-      - OUTPUTS=minor_query
+      - OUTPUTS=minor_query,max_query,avg_query,scatter_gather_query,count_query
