@@ -7,7 +7,7 @@ from dispatchers.projection_dispatcher import ProjectionDispatcher
 from dispatchers.queue_dispatcher import QueueDispatcher
 from operations.core.operation_factory import OperationFactory
 from domain.message_type import MessageType
-from middleware.middleware_rabbitmq import MessageMiddlewareQueueRabbitMQ
+from common.middleware.middleware_rabbitmq import MessageMiddlewareQueueRabbitMQ
 
 logging.basicConfig(level=logging.INFO)
 

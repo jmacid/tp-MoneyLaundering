@@ -3,7 +3,7 @@ import logging
 import os
 import signal
 import yaml
-from middleware.middleware_rabbitmq import MessageMiddlewareQueueRabbitMQ
+from common.middleware.middleware_rabbitmq import MessageMiddlewareQueueRabbitMQ
 
 logging.basicConfig(level=logging.INFO)
 
