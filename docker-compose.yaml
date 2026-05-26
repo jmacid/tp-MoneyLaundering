@@ -1,46 +1,115 @@
 services:
-  gateway:
+  rabbitmq:
+    image: rabbitmq:3-management
+    container_name: rabbitmq
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    healthcheck:
+      test: rabbitmq-diagnostics check_port_connectivity
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 50s
+    environment:
+      - RABBITMQ_LOG_LEVELS=error
+
+  projection_dispatcher:
     build:
       context: ./src/
-      dockerfile: gateway/Dockerfile
-    container_name: gateway
+      dockerfile: workers/worker/Dockerfile
+    container_name: projection_dispatcher
     depends_on:
       rabbitmq:
         condition: service_healthy
     environment:
-    - INPUT_QUEUE=results_queue
-    - MOM_HOST=rabbitmq
-    - OUTPUT_QUEUE=input_queue
-    - PYTHONUNBUFFERED=1
-    - SERVER_HOST=gateway
-    - SERVER_PORT=5678
-  client_0:
+      - RABBITMQ_HOST=rabbitmq
+      - OPERATION_TYPE=projection_dispatcher
+      - INPUT_MIDDLEWARE_TYPE=queue
+      - INPUT_QUEUE=transactions
+      - OUTPUTS=minor_query,max_query,avg_query,scatter_gather_query,count_query
+
+  date_range_filter:
     build:
       context: ./src/
-      dockerfile: client/Dockerfile
-    container_name: client_0
+      dockerfile: workers/worker/Dockerfile
+    container_name: date_range_filter
     depends_on:
-      - gateway
+      rabbitmq:
+        condition: service_healthy
     environment:
-    - INPUT_FILE=/datasets/HI-Small_Trans.csv
-    - SERVER_HOST=gateway
-    - SERVER_PORT=5678
-    volumes:
-    - ./datasets:/datasets
-    - ./output:/output
-  rabbitmq:
+      - RABBITMQ_HOST=rabbitmq
+      - OPERATION_TYPE=date_range_filter
+      - INPUT_MIDDLEWARE_TYPE=queue
+      - INPUT_QUEUE=count_query
+      - OUTPUT_MIDDLEWARE_TYPE=queue
+      - OUTPUTS=range_transactions
+      - START_DATE=2026-01-01T00:00:00
+      - END_DATE=2026-12-31T23:59:59
+
+  payment_method_filter:
     build:
-      context: ./src/rabbitmq
-      dockerfile: Dockerfile
-    container_name: rabbitmq
+      context: ./src/
+      dockerfile: workers/worker/Dockerfile
+    container_name: payment_method_filter
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
     environment:
-    - RABBITMQ_LOG_LEVELS=error
-    healthcheck:
-      interval: 5s
-      retries: 10
-      start_period: 50s
-      test: rabbitmq-diagnostics check_port_connectivity
-      timeout: 3s
-    ports:
-    - 5672:5672
-    - 15672:15672
+      - RABBITMQ_HOST=rabbitmq
+      - OPERATION_TYPE=payment_method_filter
+      - INPUT_MIDDLEWARE_TYPE=queue
+      - INPUT_QUEUE=range_transactions
+      - OUTPUT_MIDDLEWARE_TYPE=queue
+      - OUTPUTS=filtered_payments
+      - PAYMENT_METHODS=Wire,ACH
+
+  currency_normalizer:
+    build:
+      context: ./src/
+      dockerfile: workers/worker/Dockerfile
+    container_name: currency_normalizer
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    environment:
+      - RABBITMQ_HOST=rabbitmq
+      - OPERATION_TYPE=currency_normalizer
+      - INPUT_MIDDLEWARE_TYPE=queue
+      - INPUT_QUEUE=filtered_payments
+      - OUTPUT_MIDDLEWARE_TYPE=queue
+      - OUTPUTS=minor_transactions_candidates
+      - TARGET_CURRENCY=USD
+
+  amount_filter:
+    build:
+      context: ./src/
+      dockerfile: workers/worker/Dockerfile
+    container_name: amount_filter
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    environment:
+      - RABBITMQ_HOST=rabbitmq
+      - OPERATION_TYPE=amount_filter
+      - INPUT_MIDDLEWARE_TYPE=queue
+      - INPUT_QUEUE=minor_transactions_candidates
+      - OUTPUT_MIDDLEWARE_TYPE=queue
+      - OUTPUTS=minor_transactions
+      - MINIMUM_AMOUNT=1
+
+  payment_method_counter:
+    build:
+      context: ./src/
+      dockerfile: workers/worker/Dockerfile
+    container_name: payment_method_counter
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    environment:
+      - RABBITMQ_HOST=rabbitmq
+      - OPERATION_TYPE=payment_method_counter
+      - INPUT_MIDDLEWARE_TYPE=queue
+      - INPUT_QUEUE=minor_transactions
+      - OUTPUT_MIDDLEWARE_TYPE=queue
+      - OUTPUTS=count_transactions
