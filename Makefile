@@ -18,7 +18,7 @@ logs:
 
 switch:
 	@echo Escenarios de prueba:
-	@echo "1) Regla 1"
+	@echo "1) Regla 1 - Transacciones menores a 50 USD"
 	@echo "2) Regla 2"
 	@echo "3) Regla 3"
 	@echo "4) Regla 4"

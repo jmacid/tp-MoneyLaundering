@@ -2,7 +2,7 @@ import json
 import os
 from typing import Any
 
-from middleware.middleware_rabbitmq import MessageMiddlewareQueueRabbitMQ
+from common import middleware
 
 
 class QueueDispatcher:
@@ -22,7 +22,7 @@ class QueueDispatcher:
         self.expected_transactions = len(self.output_queues)
 
         self.middlewares = {
-            queue: MessageMiddlewareQueueRabbitMQ(
+            queue: middleware.MessageMiddlewareQueueRabbitMQ(
                 host=os.getenv("RABBITMQ_HOST", "rabbitmq"),
                 queue_name=queue,
             )

@@ -1,8 +1,6 @@
 from typing import Any
 
-from middleware.middleware_rabbitmq import (
-    MessageMiddlewareExchangeRabbitMQ,
-)
+from common import middleware
 
 
 class ExchangeDispatcher:
@@ -10,7 +8,7 @@ class ExchangeDispatcher:
     def __init__(self,exchange_name: str):
 
         self.middleware = (
-            MessageMiddlewareExchangeRabbitMQ(
+            middleware.MessageMiddlewareExchangeRabbitMQ(
                 host="rabbitmq",
                 exchange_name=exchange_name,
             )

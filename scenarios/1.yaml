@@ -8,9 +8,9 @@ services:
       rabbitmq:
         condition: service_healthy
     environment:
-    - INPUT_QUEUE=results_queue
+    - INPUT_QUEUE=minor_transactions
     - MOM_HOST=rabbitmq
-    - OUTPUT_QUEUE=input_queue
+    - OUTPUT_QUEUE=transactions
     - PYTHONUNBUFFERED=1
     - SERVER_HOST=gateway
     - SERVER_PORT=5678
@@ -44,3 +44,17 @@ services:
     ports:
     - 5672:5672
     - 15672:15672
+  projection_dispatcher:
+    build:
+      context: ./src/
+      dockerfile: workers/worker/Dockerfile
+    container_name: projection_dispatcher
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    environment:
+      - RABBITMQ_HOST=rabbitmq
+      - OPERATION_TYPE=projection_dispatcher
+      - INPUT_MIDDLEWARE_TYPE=queue
+      - INPUT_QUEUE=transactions
+      - OUTPUTS=minor_query

@@ -3,7 +3,7 @@ import logging
 import os
 from typing import Any
 
-from middleware.middleware_rabbitmq import MessageMiddlewareQueueRabbitMQ
+from common import middleware
 
 
 class QueueConsumer:
@@ -14,7 +14,7 @@ class QueueConsumer:
         if not queue_name:
             raise ValueError("Missing INPUT_QUEUE")
 
-        self.middleware = MessageMiddlewareQueueRabbitMQ(
+        self.middleware = middleware.MessageMiddlewareQueueRabbitMQ(
             host=os.getenv("RABBITMQ_HOST", "rabbitmq"),
             queue_name=queue_name,
         )

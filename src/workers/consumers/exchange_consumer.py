@@ -3,7 +3,7 @@ import logging
 import os
 from typing import Any
 
-from middleware.middleware_rabbitmq import MessageMiddlewareExchangeRabbitMQ
+from common import middleware
 
 
 class ExchangeConsumer:
@@ -24,7 +24,7 @@ class ExchangeConsumer:
             if key.strip()
         ]
 
-        self.middleware = MessageMiddlewareExchangeRabbitMQ(
+        self.middleware = middleware.MessageMiddlewareExchangeRabbitMQ(
             host=os.getenv("RABBITMQ_HOST", "rabbitmq"),
             exchange_name=exchange_name,
             routing_keys=routing_keys,
