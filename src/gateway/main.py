@@ -21,6 +21,7 @@ def handle_client_request(client_socket, message_handler):
     try:
         while True:
             message = message_protocol.external.recv_msg(client_socket)
+            logging.info(f"message received: {message}")
             
             if message[0] == message_protocol.external.MsgType.TRANSACTION_RECORD:
                 serialized_message = message_handler.serialize_data_message(message[1])

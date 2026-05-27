@@ -78,7 +78,7 @@ def main():
         )
 
         result = operation.process(transaction)
-        logging.info(f"Processed transaction: {result}")
+        logging.info(f"Processed transaction result: {result}")
 
         if result is None:
             return
