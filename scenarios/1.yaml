@@ -14,6 +14,7 @@ services:
     - PYTHONUNBUFFERED=1
     - SERVER_HOST=gateway
     - SERVER_PORT=5678
+    - EOF_CONTROL_QUEUE=eof_control_queue
   client_0:
     build:
       context: ./src/
@@ -58,6 +59,7 @@ services:
       - INPUT_MIDDLEWARE_TYPE=queue
       - INPUT_QUEUE=transactions
       - OUTPUTS=minor_query,max_query,avg_query,scatter_gather_query,count_query
+      - EOF_CONTROL_QUEUE=eof_control_queue
   currency_filter:
     build:
       context: ./src/
@@ -74,6 +76,7 @@ services:
       - OUTPUT_MIDDLEWARE_TYPE=queue
       - OUTPUTS=USD_transactions
       - CURRENCY=US Dollar
+      - EOF_CONTROL_QUEUE=eof_control_queue
   date_range_filter:
     build:
       context: ./src/
@@ -91,6 +94,7 @@ services:
       - OUTPUTS=range_transactions
       - START_DATE=2022-09-01T00:15:00
       - END_DATE=2022-09-01T00:30:00
+      - EOF_CONTROL_QUEUE=eof_control_queue
   amount_filter:
     build:
       context: ./src/
@@ -107,3 +111,14 @@ services:
       - OUTPUT_MIDDLEWARE_TYPE=queue
       - OUTPUTS=minor_transactions
       - MINIMUM_AMOUNT=50
+      - EOF_CONTROL_QUEUE=eof_control_queue
+  eof_tracker:
+    build:
+      context: ./src/
+      dockerfile: tracker/Dockerfile
+    container_name: eof_tracker
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    environment:
+      - RABBITMQ_HOST=rabbitmq

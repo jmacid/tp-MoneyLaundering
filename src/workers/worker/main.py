@@ -6,6 +6,8 @@ from workers.dispatchers.exchange_dispatcher import ExchangeDispatcher
 from workers.dispatchers.projection_dispatcher import ProjectionDispatcher
 from workers.dispatchers.queue_dispatcher import QueueDispatcher
 from operations.core.operation_factory import OperationFactory
+import json
+from common import middleware
 
 ALLOWED_OPERATIONS = ["currency_filter","amount_filter","date_range_filter","payment_method_filter",
                       "payment_method_counter","currency_normalizer", "projection_dispatcher"]
@@ -14,6 +16,9 @@ logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s [%(levelname)s] %(message)s",
 )
+
+EOF_CONTROL_QUEUE =os.getenv("EOF_CONTROL_QUEUE", "eof_control_queue")
+RABBITMQ_HOST = os.getenv("RABBITMQ_HOST", "rabbitmq")
 
 def build_operation():
     operation_type = os.getenv("OPERATION_TYPE")
@@ -62,28 +67,35 @@ def main():
     dispatcher = initialize_dispatcher()
     consumer = initialize_consumer()
 
-    dispatcher = (
-        None
-        if isinstance(operation, ProjectionDispatcher)
-        else initialize_dispatcher()
+    control_queue = middleware.MessageMiddlewareQueueRabbitMQ(
+        RABBITMQ_HOST,
+        EOF_CONTROL_QUEUE
     )
+
+    node_name = os.getenv("OPERATION_TYPE")
 
     logging.info(f"Initialized successfully operation: {os.getenv("OPERATION_TYPE")}")
 
     def handle_message(transaction):
-
-        logging.info(
-            "Processing transaction: %s",
-            transaction,
-        )
+        logging.info("Processing transaction: %s", transaction)
 
         result = operation.process(transaction)
         logging.info(f"Processed transaction result: {result}")
 
-        if result is None:
-            return
+        if result is not None and dispatcher is not None:
+            dispatcher.process([result])
+        if isinstance(operation, ProjectionDispatcher):
+            emitted_count = 1
+        else:
+            emitted_count = 1 if result is not None else 0
 
-        dispatcher.process([result])
+        control_msg = json.dumps({
+            "client_id": transaction["client_id"],
+            "node": node_name,
+            "processed": 1,
+            "emitted": emitted_count
+        })
+        control_queue.send(control_msg.encode('utf-8'))
 
     consumer.start(handle_message)
 

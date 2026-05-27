@@ -6,6 +6,7 @@ import multiprocessing
 import message_handler
 from common import middleware, message_protocol
 import uuid
+import json
 
 SERVER_HOST = os.environ["SERVER_HOST"]
 SERVER_PORT = int(os.environ["SERVER_PORT"])
@@ -13,10 +14,14 @@ SERVER_PORT = int(os.environ["SERVER_PORT"])
 MOM_HOST = os.environ["MOM_HOST"]
 INPUT_QUEUE = os.environ["INPUT_QUEUE"]
 OUTPUT_QUEUE = os.environ["OUTPUT_QUEUE"]
+EOF_CONTROL_QUEUE = os.environ["EOF_CONTROL_QUEUE"]
 
 
 def handle_client_request(client_socket, message_handler):
     output_queue = middleware.MessageMiddlewareQueueRabbitMQ(MOM_HOST, OUTPUT_QUEUE)
+    control_queue = middleware.MessageMiddlewareQueueRabbitMQ(MOM_HOST, EOF_CONTROL_QUEUE)
+
+    transactions_sent = 0
 
     try:
         while True:
@@ -26,14 +31,20 @@ def handle_client_request(client_socket, message_handler):
             if message[0] == message_protocol.external.MsgType.TRANSACTION_RECORD:
                 serialized_message = message_handler.serialize_data_message(message[1])
                 output_queue.send(serialized_message)
+                transactions_sent += 1
                 message_protocol.external.send_msg(
                     client_socket, message_protocol.external.MsgType.ACK
                 )
 
             if message[0] == message_protocol.external.MsgType.END_OF_RECODS:
                 logging.info(f"End of records: {message[1]}")
-                serialized_message = message_handler.serialize_eof_message(message[1])
-                output_queue.send(serialized_message)
+                eof_msg = json.dumps({
+                    "client_id": message_handler.client_id,
+                    "node": "gateway",
+                    "emitted": transactions_sent
+                })
+                control_queue.send(eof_msg.encode('utf-8'))
+
                 message_protocol.external.send_msg(
                     client_socket, message_protocol.external.MsgType.ACK
                 )
@@ -44,6 +55,7 @@ def handle_client_request(client_socket, message_handler):
         logging.error(e)
     finally:
         output_queue.close()
+        control_queue.close()
 
 
 def handle_client_response(client_list):
