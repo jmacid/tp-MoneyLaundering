@@ -9,6 +9,7 @@ from itertools import islice
 SERVER_HOST = os.environ["SERVER_HOST"]
 SERVER_PORT = int(os.environ["SERVER_PORT"])
 INPUT_FILE = os.environ["INPUT_FILE"]
+OUTPUT_FILE_MINOR_RESULT = os.environ["OUTPUT_FILE_MINOR_RESULT"]
 
 class Client:
     def __init__(self):
@@ -37,7 +38,7 @@ class Client:
             csv_reader = csv.reader(csvfile, delimiter=",", quotechar='"')
             header = next(csv_reader)
             logging.info(f"header: {header}")
-            for row in islice(csv_reader, 5):
+            for row in islice(csv_reader, 10000):
                 logging.info(f"row: {row}")
                 message_protocol.external.send_msg(
                     self.server_socket,
@@ -62,6 +63,13 @@ class Client:
 
             if msg_type == message_protocol.external.MsgType.MINOR_RESULT:
                 logging.info(f"SUSPICIOUS MINOR TRANSACTION DETECTED: {msg_payload}")
+                file_exists = os.path.isfile(OUTPUT_FILE_MINOR_RESULT)
+
+                with open(OUTPUT_FILE_MINOR_RESULT, "a") as csvfile:
+                    csv_writer = csv.writer(csvfile, delimiter=",", quotechar='"')
+                    if not file_exists:
+                        csv_writer.writerow(msg_payload.keys())
+                    csv_writer.writerow(msg_payload.values())
 
             elif msg_type == message_protocol.external.MsgType.END_OF_RECODS:
                 logging.info("All results received. Processing finished successfully.")

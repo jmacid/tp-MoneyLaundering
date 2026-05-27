@@ -15,17 +15,33 @@ services:
     - SERVER_HOST=gateway
     - SERVER_PORT=5678
     - EOF_CONTROL_QUEUE=eof_control_queue
-  client_0:
+  client_1:
     build:
       context: ./src/
       dockerfile: client/Dockerfile
-    container_name: client_0
+    container_name: client_1
     depends_on:
       - gateway
     environment:
     - INPUT_FILE=/datasets/HI-Small_Trans.csv
     - SERVER_HOST=gateway
     - SERVER_PORT=5678
+    - OUTPUT_FILE_MINOR_RESULT=/output/client_1_minor_result.csv
+    volumes:
+    - ./datasets:/datasets
+    - ./output:/output
+  client_2:
+    build:
+      context: ./src/
+      dockerfile: client/Dockerfile
+    container_name: client_2
+    depends_on:
+      - gateway
+    environment:
+    - INPUT_FILE=/datasets/HI-Small_Trans.csv
+    - SERVER_HOST=gateway
+    - SERVER_PORT=5678
+    - OUTPUT_FILE_MINOR_RESULT=/output/client_2_minor_result.csv
     volumes:
     - ./datasets:/datasets
     - ./output:/output
@@ -45,7 +61,22 @@ services:
     ports:
     - 5672:5672
     - 15672:15672
-  projection_dispatcher:
+  projection_dispatcher_1:
+    build:
+      context: ./src/
+      dockerfile: workers/worker/Dockerfile
+    container_name: projection_dispatcher
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    environment:
+      - RABBITMQ_HOST=rabbitmq
+      - OPERATION_TYPE=projection_dispatcher
+      - INPUT_MIDDLEWARE_TYPE=queue
+      - INPUT_QUEUE=transactions
+      - OUTPUTS=minor_query,max_query,avg_query,scatter_gather_query,count_query
+      - EOF_CONTROL_QUEUE=eof_control_queue
+  projection_dispatcher_2:
     build:
       context: ./src/
       dockerfile: workers/worker/Dockerfile
