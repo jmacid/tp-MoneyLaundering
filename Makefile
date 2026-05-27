@@ -9,7 +9,8 @@ up:
 
 down:
 	docker compose -f docker-compose.yaml stop -t 5
-	docker compose -f docker-compose.yaml down
+	docker compose -f docker-compose.yaml down -v
+	find output -mindepth 1 -delete
 .PHONY: down
 
 logs:

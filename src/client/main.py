@@ -15,6 +15,8 @@ class Client:
     def __init__(self):
         self.closed = False
         self._prev_sigterm_handler = signal.signal(signal.SIGTERM, self.handle_sigterm)
+        self.output_file_minor_result = None
+        self.csv_writer = None
 
     def handle_sigterm(self, signum, frame):
         logging.info("[client] Recieved SIGTERM signal")
@@ -31,30 +33,40 @@ class Client:
     def disconnect(self):
         if self.server_socket:
             self.server_socket.shutdown(socket.SHUT_RDWR)
+        if self.output_file_minor_result:
+            self.output_file_minor_result.close()
     
     def send_transaction_records(self, input_file):
         logging.info("[send_transaction_records] Sending transaction records")
         with open(input_file, newline="\n") as csvfile:
             csv_reader = csv.reader(csvfile, delimiter=",", quotechar='"')
-            header = next(csv_reader)
-            logging.info(f"header: {header}")
+            _header = next(csv_reader)
+
             for row in islice(csv_reader, 10000):
-                logging.info(f"row: {row}")
                 message_protocol.external.send_msg(
                     self.server_socket,
                     message_protocol.external.MsgType.TRANSACTION_RECORD,
                     row
                 )
-                logging.info("[send_transaction_records]: recv i")
-                msg_0, msg_1 = message_protocol.external.recv_msg(self.server_socket)
-                logging.info(f"[send_transaction_records]: recv f: {msg_0} - {msg_1}")
 
-        logging.info("[send_transaction_records]: END_OF_RECODS i")
+                while True:
+                    msg_type, msg_payload = message_protocol.external.recv_msg(self.server_socket)
+                    if msg_type == message_protocol.external.MsgType.ACK:
+                        break
+                    elif msg_type == message_protocol.external.MsgType.MINOR_RESULT:
+                        self._save_minor_result(msg_payload)
+
+        logging.info("[send_transaction_records]: Enviando END_OF_RECODS")
         message_protocol.external.send_msg(
             self.server_socket, message_protocol.external.MsgType.END_OF_RECODS
         )
-        message_protocol.external.recv_msg(self.server_socket)
-        logging.info("[send_transaction_records]: END_OF_RECODS f")
+
+        while True:
+            msg_type, msg_payload = message_protocol.external.recv_msg(self.server_socket)
+            if msg_type == message_protocol.external.MsgType.ACK:
+                break
+            elif msg_type == message_protocol.external.MsgType.MINOR_RESULT:
+                self._save_minor_result(msg_payload)
 
     def receive_results(self):
         logging.info("[receive_results] Waiting for processed results....")
@@ -62,18 +74,22 @@ class Client:
             msg_type, msg_payload = message_protocol.external.recv_msg(self.server_socket)
 
             if msg_type == message_protocol.external.MsgType.MINOR_RESULT:
-                logging.info(f"SUSPICIOUS MINOR TRANSACTION DETECTED: {msg_payload}")
-                file_exists = os.path.isfile(OUTPUT_FILE_MINOR_RESULT)
-
-                with open(OUTPUT_FILE_MINOR_RESULT, "a") as csvfile:
-                    csv_writer = csv.writer(csvfile, delimiter=",", quotechar='"')
-                    if not file_exists:
-                        csv_writer.writerow(msg_payload.keys())
-                    csv_writer.writerow(msg_payload.values())
-
+                self._save_minor_result(msg_payload)
             elif msg_type == message_protocol.external.MsgType.END_OF_RECODS:
                 logging.info("All results received. Processing finished successfully.")
                 break
+
+    def _save_minor_result(self, msg_payload):
+        logging.info(f"SUSPICIOUS MINOR TRANSACTION DETECTED: {msg_payload}")
+        file_exists = os.path.isfile(OUTPUT_FILE_MINOR_RESULT)
+
+        if self.output_file_minor_result is None:
+            self.output_file_minor_result = open(OUTPUT_FILE_MINOR_RESULT, "a")
+            self.csv_writer = csv.writer(self.output_file_minor_result, delimiter=",", quotechar='"')
+            if not file_exists:
+                self.csv_writer.writerow(msg_payload.keys())
+            self.csv_writer.writerow(msg_payload.values())
+
 
 def main() -> int:
     logging.basicConfig(level=logging.INFO)

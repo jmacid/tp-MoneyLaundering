@@ -65,7 +65,7 @@ services:
     build:
       context: ./src/
       dockerfile: workers/worker/Dockerfile
-    container_name: projection_dispatcher
+    container_name: projection_dispatcher_1
     depends_on:
       rabbitmq:
         condition: service_healthy
@@ -80,7 +80,7 @@ services:
     build:
       context: ./src/
       dockerfile: workers/worker/Dockerfile
-    container_name: projection_dispatcher
+    container_name: projection_dispatcher_2
     depends_on:
       rabbitmq:
         condition: service_healthy
@@ -91,11 +91,26 @@ services:
       - INPUT_QUEUE=transactions
       - OUTPUTS=minor_query,max_query,avg_query,scatter_gather_query,count_query
       - EOF_CONTROL_QUEUE=eof_control_queue
-  currency_filter:
+  projection_dispatcher_3:
     build:
       context: ./src/
       dockerfile: workers/worker/Dockerfile
-    container_name: currency_filter
+    container_name: projection_dispatcher3
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    environment:
+      - RABBITMQ_HOST=rabbitmq
+      - OPERATION_TYPE=projection_dispatcher
+      - INPUT_MIDDLEWARE_TYPE=queue
+      - INPUT_QUEUE=transactions
+      - OUTPUTS=minor_query,max_query,avg_query,scatter_gather_query,count_query
+      - EOF_CONTROL_QUEUE=eof_control_queue
+  currency_filter_1:
+    build:
+      context: ./src/
+      dockerfile: workers/worker/Dockerfile
+    container_name: currency_filter_1
     depends_on:
       rabbitmq:
         condition: service_healthy
@@ -108,11 +123,45 @@ services:
       - OUTPUTS=USD_transactions
       - CURRENCY=US Dollar
       - EOF_CONTROL_QUEUE=eof_control_queue
-  date_range_filter:
+  currency_filter_2:
     build:
       context: ./src/
       dockerfile: workers/worker/Dockerfile
-    container_name: date_range_filter
+    container_name: currency_filter_2
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    environment:
+      - RABBITMQ_HOST=rabbitmq
+      - OPERATION_TYPE=currency_filter
+      - INPUT_MIDDLEWARE_TYPE=queue
+      - INPUT_QUEUE=minor_query
+      - OUTPUT_MIDDLEWARE_TYPE=queue
+      - OUTPUTS=USD_transactions
+      - CURRENCY=US Dollar
+      - EOF_CONTROL_QUEUE=eof_control_queue
+  currency_filter_3:
+    build:
+      context: ./src/
+      dockerfile: workers/worker/Dockerfile
+    container_name: currency_filter_3
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    environment:
+      - RABBITMQ_HOST=rabbitmq
+      - OPERATION_TYPE=currency_filter
+      - INPUT_MIDDLEWARE_TYPE=queue
+      - INPUT_QUEUE=minor_query
+      - OUTPUT_MIDDLEWARE_TYPE=queue
+      - OUTPUTS=USD_transactions
+      - CURRENCY=US Dollar
+      - EOF_CONTROL_QUEUE=eof_control_queue
+  date_range_filter_1:
+    build:
+      context: ./src/
+      dockerfile: workers/worker/Dockerfile
+    container_name: date_range_filter_1
     depends_on:
       rabbitmq:
         condition: service_healthy
@@ -126,11 +175,81 @@ services:
       - START_DATE=2022-09-01T00:15:00
       - END_DATE=2022-09-01T00:30:00
       - EOF_CONTROL_QUEUE=eof_control_queue
-  amount_filter:
+  date_range_filter_2:
     build:
       context: ./src/
       dockerfile: workers/worker/Dockerfile
-    container_name: amount_filter
+    container_name: date_range_filter_2
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    environment:
+      - RABBITMQ_HOST=rabbitmq
+      - OPERATION_TYPE=date_range_filter
+      - INPUT_MIDDLEWARE_TYPE=queue
+      - INPUT_QUEUE=USD_transactions
+      - OUTPUT_MIDDLEWARE_TYPE=queue
+      - OUTPUTS=range_transactions
+      - START_DATE=2022-09-01T00:15:00
+      - END_DATE=2022-09-01T00:30:00
+      - EOF_CONTROL_QUEUE=eof_control_queue
+  date_range_filter_3:
+    build:
+      context: ./src/
+      dockerfile: workers/worker/Dockerfile
+    container_name: date_range_filter_3
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    environment:
+      - RABBITMQ_HOST=rabbitmq
+      - OPERATION_TYPE=date_range_filter
+      - INPUT_MIDDLEWARE_TYPE=queue
+      - INPUT_QUEUE=USD_transactions
+      - OUTPUT_MIDDLEWARE_TYPE=queue
+      - OUTPUTS=range_transactions
+      - START_DATE=2022-09-01T00:15:00
+      - END_DATE=2022-09-01T00:30:00
+      - EOF_CONTROL_QUEUE=eof_control_queue
+  amount_filter_1:
+    build:
+      context: ./src/
+      dockerfile: workers/worker/Dockerfile
+    container_name: amount_filter_1
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    environment:
+      - RABBITMQ_HOST=rabbitmq
+      - OPERATION_TYPE=amount_filter
+      - INPUT_MIDDLEWARE_TYPE=queue
+      - INPUT_QUEUE=range_transactions
+      - OUTPUT_MIDDLEWARE_TYPE=queue
+      - OUTPUTS=minor_transactions
+      - MINIMUM_AMOUNT=50
+      - EOF_CONTROL_QUEUE=eof_control_queue
+  amount_filter_2:
+    build:
+      context: ./src/
+      dockerfile: workers/worker/Dockerfile
+    container_name: amount_filter_2
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    environment:
+      - RABBITMQ_HOST=rabbitmq
+      - OPERATION_TYPE=amount_filter
+      - INPUT_MIDDLEWARE_TYPE=queue
+      - INPUT_QUEUE=range_transactions
+      - OUTPUT_MIDDLEWARE_TYPE=queue
+      - OUTPUTS=minor_transactions
+      - MINIMUM_AMOUNT=50
+      - EOF_CONTROL_QUEUE=eof_control_queue
+  amount_filter_3:
+    build:
+      context: ./src/
+      dockerfile: workers/worker/Dockerfile
+    container_name: amount_filter_3
     depends_on:
       rabbitmq:
         condition: service_healthy
