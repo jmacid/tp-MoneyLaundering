@@ -52,13 +52,19 @@ def handle_client_response(client_list):
     def _consume_result(message, ack, nack):
         try:
             fields = message_protocol.internal.deserialize(message)
+            logging.info(f"Message received {fields}")
 
-            if len(fields) != 2:
+            if isinstance(fields, list) and len(fields) == 1:
+                target_client_id = fields[0]
+                logging.info(f"Gateway received EOF for client {target_client_id[:8]}")
                 ack()
                 return
 
-            target_client_id = fields[0]
-            # fruit_top = fields[1]
+            if not isinstance(fields, dict) or "client_id" not in fields:
+                ack()
+                return
+
+            target_client_id = fields["client_id"]
 
             client_index = -1
             target_socket = None
@@ -69,17 +75,10 @@ def handle_client_response(client_list):
                     target_socket = client_data[2]
                     break
 
-            # if target_socket:
-            #     logging.info(f"[_consume_result] Enviando FRUIT_TOP al cliente {target_client_id[:8]}")
-            #     message_protocol.external.send_msg(
-            #         target_socket,
-            #         message_protocol.external.MsgType.FRUIT_TOP,
-            #         fruit_top,
-            #     )
-            #     message_protocol.external.recv_msg(target_socket)
-            #     client_list.pop(client_index)
-            # else:
-            #     logging.warning(f"[_consume_result] Socket no encontrado para el cliente {target_client_id[:8]}")
+            if target_socket:
+                logging.info(f"[_consume_result] Resultado final listo para enviar al cliente {target_client_id[:8]}: {fields}")
+            else:
+                logging.warning(f"[_consume_result] Socket no encontrado para el cliente {target_client_id[:8]}")
 
             ack()
 

@@ -23,6 +23,6 @@ class AmountFilter(OperationStrategy):
         TransactionValidator.validate_required_fields(transaction, self.required_fields)
 
         logging.info(f"transaction amount_paid: {transaction["amount_paid"]} - {self.minimum_amount}")
-        if Decimal(transaction["amount_paid"]) >= self.minimum_amount:
+        if Decimal(transaction["amount_paid"]) < self.minimum_amount:
             return transaction
         return None
