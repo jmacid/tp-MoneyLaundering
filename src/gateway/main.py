@@ -47,16 +47,24 @@ def handle_client_request(client_socket, message_handler):
 
 
 def handle_client_response(client_list):
+    logging.basicConfig(level=logging.INFO)
+    logging.info(f"Listening to {INPUT_QUEUE} queue")
     input_queue = middleware.MessageMiddlewareQueueRabbitMQ(MOM_HOST, INPUT_QUEUE)
 
     def _consume_result(message, ack, nack):
         try:
             fields = message_protocol.internal.deserialize(message)
-            logging.info(f"Message received {fields}")
 
             if isinstance(fields, list) and len(fields) == 1:
                 target_client_id = fields[0]
-                logging.info(f"Gateway received EOF for client {target_client_id[:8]}")
+                logging.info(f"Gateway received EOF for client {target_client_id[:8]}. Sending to client...")
+
+                for idx, client_data in enumerate(client_list):
+                    if client_data[0] == target_client_id:
+                        target_socket = client_data[2]
+                        message_protocol.external.send_msg(target_socket, message_protocol.external.MsgType.END_OF_RECODS)
+                        client_list.pop(idx) # Liberamos recursos del cliente
+                        break
                 ack()
                 return
 
@@ -64,31 +72,21 @@ def handle_client_response(client_list):
                 ack()
                 return
 
-            target_client_id = fields["client_id"]
+            target_client_id = fields.pop("client_id")
 
-            client_index = -1
-            target_socket = None
-
-            for idx, client_data in enumerate(client_list):
+            for client_data in client_list:
                 if client_data[0] == target_client_id:
-                    client_index = idx
                     target_socket = client_data[2]
+                    message_protocol.external.send_msg(
+                        target_socket,
+                        message_protocol.external.MsgType.MINOR_RESULT,
+                        fields,
+                    )
                     break
 
-            if target_socket:
-                logging.info(f"[_consume_result] Resultado final listo para enviar al cliente {target_client_id[:8]}: {fields}")
-            else:
-                logging.warning(f"[_consume_result] Socket no encontrado para el cliente {target_client_id[:8]}")
-
-            ack()
-
-        except socket.error:
-            logging.error("[_consume_result] Se perdio la conexion con el cliente")
-            if client_index != -1:
-                client_list.pop(client_index)
             ack()
         except Exception as e:
-            logging.error(f"[_consume_result] Error inesperado en: {e}")
+            logging.error(f"[_consume_result] Error: {e}")
             nack()
             input_queue.stop_consuming()
 

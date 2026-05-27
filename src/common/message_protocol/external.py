@@ -1,13 +1,13 @@
 from asyncio import IncompleteReadError
-
 from . import external_serializer
-
+import json
 
 class MsgType:
     TRANSACTION_RECORD = 1
     # TRANSACTION_TOP = 2
     ACK = 3
     END_OF_RECODS = 4
+    MINOR_RESULT = 5
 
 
 def _recv_sized(socket, size):
@@ -60,16 +60,8 @@ def _recv_transaction_record(socket):
         payment_currency, payment_format, is_laundering
     )
 
-
-# def _recv_transaction_top(socket):
-#     transaction_top_size = external_serializer.deserialize_uint32(
-#         _recv_sized(socket, external_serializer.UINT32_SIZE)
-#     )
-#     transaction_top = []
-#     for _ in range(transaction_top_size):
-#         transaction_record = _recv_transaction_record(socket)
-#         transaction_top.append(transaction_record)
-#     return transaction_top
+def _recv_minor_result(socket):
+    return json.loads(_recv_string(socket))
 
 
 def _recv_empty(socket):
@@ -81,6 +73,7 @@ RECV_MSG_HANDLERS = {
     # MsgType.TRANSACTION_TOP: _recv_transaction_top,
     MsgType.ACK: _recv_empty,
     MsgType.END_OF_RECODS: _recv_empty,
+    MsgType.MINOR_RESULT: _recv_minor_result,
 }
 
 
@@ -127,14 +120,10 @@ def _send_transaction_record(socket, row):
     )
     socket.sendall(msg)
 
-
-# def _send_transaction_top(socket, transaction_top):
-#     msg = external_serializer.serialize_uint32(MsgType.TRANSACTION_TOP)
-#     msg += external_serializer.serialize_uint32(len(transaction_top))
-#     for transaction_record in transaction_top:
-#         msg += _serialize_transaction_record(*transaction_record)
-#     socket.sendall(msg)
-
+def _send_minor_result(socket, result_dict):
+    msg = external_serializer.serialize_uint32(MsgType.MINOR_RESULT)
+    msg += _serialize_string(json.dumps(result_dict))
+    socket.sendall(msg)
 
 def _send_ack(socket):
     socket.sendall(external_serializer.serialize_uint32(MsgType.ACK))
@@ -149,6 +138,7 @@ SEND_MSG_HANDLERS = {
     # MsgType.TRANSACTION_TOP: _send_transaction_top,
     MsgType.ACK: _send_ack,
     MsgType.END_OF_RECODS: _send_end_of_records,
+    MsgType.MINOR_RESULT: _send_minor_result,
 }
 
 

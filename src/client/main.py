@@ -55,6 +55,18 @@ class Client:
         message_protocol.external.recv_msg(self.server_socket)
         logging.info("[send_transaction_records]: END_OF_RECODS f")
 
+    def receive_results(self):
+        logging.info("[receive_results] Waiting for processed results....")
+        while not self.closed:
+            msg_type, msg_payload = message_protocol.external.recv_msg(self.server_socket)
+
+            if msg_type == message_protocol.external.MsgType.MINOR_RESULT:
+                logging.info(f"SUSPICIOUS MINOR TRANSACTION DETECTED: {msg_payload}")
+
+            elif msg_type == message_protocol.external.MsgType.END_OF_RECODS:
+                logging.info("All results received. Processing finished successfully.")
+                break
+
 def main() -> int:
     logging.basicConfig(level=logging.INFO)
     client = Client()
@@ -64,6 +76,7 @@ def main() -> int:
         pass
         client.connect(SERVER_HOST, SERVER_PORT)
         client.send_transaction_records(INPUT_FILE)
+        client.receive_results()
     except socket.error:
         if not client.closed:
             logging.error("The connection with the server was lost")
