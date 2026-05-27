@@ -6,13 +6,18 @@ from common import middleware
 
 logging.basicConfig(level=logging.INFO)
 
-TOPOLOGY = {
-    "gateway": "projection_dispatcher",
-    "projection_dispatcher": "currency_filter",
-    "currency_filter": "date_range_filter",
-    "date_range_filter": "amount_filter",
-    "amount_filter": "END"
-}
+def get_topology():
+    topology_env = os.environ["TOPOLOGY"]
+    topology_nodes = [node.strip() for node in topology_env.split(",") if node.strip()]
+    topology = {}
+    for i in range(len(topology_nodes) - 1):
+        topology[topology_nodes[i]] = topology_nodes[i + 1]
+    if topology_nodes:
+        topology[topology_nodes[-1]] = "END"
+    return topology
+
+topology = get_topology()
+
 
 def main():
     control_queue = middleware.MessageMiddlewareQueueRabbitMQ("rabbitmq", "eof_control_queue")
@@ -26,14 +31,14 @@ def main():
             return 
 
         expected_next = state[client_id]["gateway"]["emitted"]
-        current_node = TOPOLOGY["gateway"]
+        current_node = topology["gateway"]
 
         while current_node != "END":
             if state[client_id][current_node]["processed"] < expected_next:
                 return 
             
             expected_next = state[client_id][current_node]["emitted"]
-            current_node = TOPOLOGY[current_node]
+            current_node = topology[current_node]
 
         logging.info(f"EOF Alcanzado para el cliente {client_id}. Enviando a Gateway...")
         eof_message = json.dumps([client_id])

@@ -272,3 +272,4 @@ services:
         condition: service_healthy
     environment:
       - RABBITMQ_HOST=rabbitmq
+      - TOPOLOGY=gateway,projection_dispatcher,currency_filter,date_range_filter,amount_filter
