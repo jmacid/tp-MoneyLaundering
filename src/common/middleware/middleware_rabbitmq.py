@@ -8,6 +8,7 @@ class MessageMiddlewareQueueRabbitMQ(MessageMiddlewareQueue):
         self.ch = connection.channel()
         self.queue_name = queue_name
         self.ch.queue_declare(queue=queue_name, durable=True, arguments={'x-queue-type': 'quorum'})
+        self.ch.confirm_delivery()
 
     def close(self):
         self.ch.close()
@@ -47,6 +48,7 @@ class MessageMiddlewareExchangeRabbitMQ(MessageMiddlewareExchange):
         self.queue_name = None
 
         self.ch.exchange_declare(exchange=exchange_name, exchange_type='direct')
+        self.ch.confirm_delivery()
 
     def close(self):
         self.ch.close()

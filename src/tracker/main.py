@@ -32,7 +32,6 @@ def main():
             if state[client_id][current_node]["processed"] < expected_next:
                 return 
             
-            logging.info(f"EOF Alcanzado para servicio {current_node} del cliente: {client_id}.\nTotal procesados - expected_next: {state[client_id][current_node]["processed"]} - {expected_next}")
             expected_next = state[client_id][current_node]["emitted"]
             current_node = TOPOLOGY[current_node]
 
