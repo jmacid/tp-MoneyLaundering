@@ -2,7 +2,7 @@ from typing import Any
 from workers.dispatchers.queue_dispatcher import QueueDispatcher
 from operations.projectors.field_projector import FieldProjector
 
-Q_1 = ["timestamp", "from_account","to_account","amount_paid"]
+Q_1 = ["timestamp", "from_account","to_account","amount_paid", "receiving_currency", "payment_currency"]
 Q_2 = ["from_account","to_bank","amount_paid"]
 Q_3 = ["timestamp","from_account","payment_format","amount_paid"]
 Q_4 = ["timestamp","from_account","to_account"]

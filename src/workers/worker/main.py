@@ -70,56 +70,22 @@ def main():
 
     logging.info(f"Initialized successfully operation: {os.getenv("OPERATION_TYPE")}")
 
+    def handle_message(transaction):
 
-    
-    if os.getenv("OPERATION_TYPE") != "projection_dispatcher":
-
-        def handle_message(transaction):
-
-            logging.info(
-                "Processing transaction: %s",
-                transaction,
-            )
-
-            result = operation.process(transaction)
-            logging.info(f"Processed transaction: {result}")
-
-            if result is None:
-                return
-            
-            dispatcher.process([result])
-        
-        consumer.start(handle_message)
-
-    else:
-        transaction = {
-            "timestamp": "2026-05-24T15:30:00",
-
-            "from_bank": "GALICIA",
-            "from_account": "AR123456789",
-
-            "to_bank": "SANTANDER",
-            "to_account": "AR987654321",
-
-            "amount_received": "1250.75",
-            "receiving_currency": "USD",
-
-            "amount_paid": "1500000.00",
-            "payment_currency": "ARS",
-
-            "payment_format": "Wire",
-
-            "is_laundering": False,
-
-            "normalized_amount_paid": "1250.75",
-            "normalized_amount_received": "1250.75",
-            "normalized_currency": "USD",
-        }
+        logging.info(
+            "Processing transaction: %s",
+            transaction,
+        )
 
         result = operation.process(transaction)
+        logging.info(f"Processed transaction: {result}")
 
-        if dispatcher is not None and result is not None:
-            dispatcher.process([result])    
+        if result is None:
+            return
+
+        dispatcher.process([result])
+
+    consumer.start(handle_message)
 
 if __name__ == "__main__":
     main()

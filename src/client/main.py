@@ -36,7 +36,9 @@ class Client:
         with open(input_file, newline="\n") as csvfile:
             csv_reader = csv.reader(csvfile, delimiter=",", quotechar='"')
             header = next(csv_reader)
+            logging.info(f"header: {header}")
             for row in islice(csv_reader, 5):
+                logging.info(f"row: {row}")
                 message_protocol.external.send_msg(
                     self.server_socket,
                     message_protocol.external.MsgType.TRANSACTION_RECORD,
