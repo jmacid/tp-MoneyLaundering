@@ -88,7 +88,7 @@ class Client:
             self.csv_writer = csv.writer(self.output_file_minor_result, delimiter=",", quotechar='"')
             if not file_exists:
                 self.csv_writer.writerow(msg_payload.keys())
-            self.csv_writer.writerow(msg_payload.values())
+        self.csv_writer.writerow(msg_payload.values())
 
 
 def main() -> int:
