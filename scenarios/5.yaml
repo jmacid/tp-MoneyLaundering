@@ -120,7 +120,7 @@ services:
       - INPUT_MIDDLEWARE_TYPE=queue
       - INPUT_QUEUE=count_query
       - OUTPUT_MIDDLEWARE_TYPE=queue
-      - OUTPUTS=range_transactions
+      - OUTPUTS=range_transactions_5
       - START_DATE=2022-09-01T00:15:00
       - END_DATE=2022-09-01T00:30:00
       - EOF_CONTROL_QUEUE=eof_control_queue
@@ -172,9 +172,9 @@ services:
       - RABBITMQ_HOST=rabbitmq
       - OPERATION_TYPE=payment_method_filter
       - INPUT_MIDDLEWARE_TYPE=queue
-      - INPUT_QUEUE=range_transactions
+      - INPUT_QUEUE=range_transactions_5
       - OUTPUT_MIDDLEWARE_TYPE=queue
-      - OUTPUTS=filtered_payments
+      - OUTPUTS=filtered_payments_5
       - PAYMENT_METHODS=Wire,ACH
   currency_normalizer_1:
     build:
@@ -188,9 +188,9 @@ services:
       - RABBITMQ_HOST=rabbitmq
       - OPERATION_TYPE=currency_normalizer
       - INPUT_MIDDLEWARE_TYPE=queue
-      - INPUT_QUEUE=filtered_payments
+      - INPUT_QUEUE=filtered_payments_5
       - OUTPUT_MIDDLEWARE_TYPE=queue
-      - OUTPUTS=minor_transactions_candidates
+      - OUTPUTS=minor_transactions_candidates_5
       - TARGET_CURRENCY=USD
   amount_filter_1:
     build:
@@ -204,7 +204,7 @@ services:
       - RABBITMQ_HOST=rabbitmq
       - OPERATION_TYPE=amount_filter
       - INPUT_MIDDLEWARE_TYPE=queue
-      - INPUT_QUEUE=minor_transactions_candidates
+      - INPUT_QUEUE=minor_transactions_candidates_5
       - OUTPUT_MIDDLEWARE_TYPE=queue
       - OUTPUTS=minor_transactions_5
       - MINIMUM_AMOUNT=55
