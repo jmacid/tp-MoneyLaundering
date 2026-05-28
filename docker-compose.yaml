@@ -74,10 +74,10 @@ services:
       - OPERATION_TYPE=currency_filter
       - INPUT_MIDDLEWARE_TYPE=queue
       - INPUT_QUEUE=avg_query
-      - OUTPUT_MIDDLEWARE_TYPE=queue
-      - OUTPUTS=USD_transactions_3
+      - OUTPUT_MIDDLEWARE_TYPE=broadcast
+      - OUTPUTS=USD_transactions_3,USD_transactions_avg_3
       - CURRENCY=US Dollar
-      - EOF_CONTROL_QUEUE=eof_control_queue
+      - EOF_CONTROL_QUEUE=eof_control_queue_3
   date_range_filter_1:
     build:
       context: ./src/
@@ -92,7 +92,25 @@ services:
       - INPUT_MIDDLEWARE_TYPE=queue
       - INPUT_QUEUE=USD_transactions_3
       - OUTPUT_MIDDLEWARE_TYPE=queue
-      - OUTPUTS=range_transactions_3
+      - OUTPUTS=threshold_evaluation_3
+      - START_DATE=2022-09-01T00:15:00
+      - END_DATE=2022-09-01T00:30:00
+      - EOF_CONTROL_QUEUE=eof_control_queue_3
+  date_range_filter_avg_1:
+    build:
+      context: ./src/
+      dockerfile: workers/worker/Dockerfile
+    container_name: date_range_filter_avg_1
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    environment:
+      - RABBITMQ_HOST=rabbitmq
+      - OPERATION_TYPE=date_range_filter
+      - INPUT_MIDDLEWARE_TYPE=queue
+      - INPUT_QUEUE=USD_transactions_avg_3
+      - OUTPUT_MIDDLEWARE_TYPE=queue
+      - OUTPUTS=avg_transactions_3
       - START_DATE=2022-09-01T00:15:00
       - END_DATE=2022-09-01T00:30:00
       - EOF_CONTROL_QUEUE=eof_control_queue_3

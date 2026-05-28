@@ -7,6 +7,7 @@ from workers.dispatchers.projection_dispatcher import ProjectionDispatcher
 from workers.dispatchers.queue_dispatcher import QueueDispatcher
 from workers.dispatchers.sharding_dispatcher import ShardingDispatcher
 from operations.core.operation_factory import OperationFactory
+from workers.dispatchers.broadcast_dispatcher import BroadcastDispatcher
 import json
 from common import middleware
 
@@ -45,6 +46,9 @@ def initialize_dispatcher():
 
     if middleware_type == "sharding_exchange":
         return ShardingDispatcher()
+
+    if middleware_type == "broadcast":
+        return BroadcastDispatcher()
 
     raise ValueError(
         f"Unsupported OUTPUT_MIDDLEWARE_TYPE: {middleware_type}"
