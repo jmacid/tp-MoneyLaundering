@@ -176,6 +176,7 @@ services:
       - OUTPUT_MIDDLEWARE_TYPE=queue
       - OUTPUTS=filtered_payments_5
       - PAYMENT_METHODS=Wire,ACH
+      - EOF_CONTROL_QUEUE=eof_control_queue_5
   currency_normalizer_1:
     build:
       context: ./src/
@@ -192,6 +193,7 @@ services:
       - OUTPUT_MIDDLEWARE_TYPE=queue
       - OUTPUTS=minor_transactions_candidates_5
       - TARGET_CURRENCY=USD
+      - EOF_CONTROL_QUEUE=eof_control_queue_5
   amount_filter_1:
     build:
       context: ./src/
@@ -311,6 +313,21 @@ services:
   #     - OUTPUTS=USD_transactions
   #     - CURRENCY=US Dollar
   #     - EOF_CONTROL_QUEUE=eof_control_queue_5
+  # payment_method_counter_1:
+  #   build:
+  #     context: ./src
+  #     dockerfile: operations/counters/Dockerfile
+  #   # command: ["python3", "-m", "operations.counters.payment_method_counter_main"]
+  #   container_name: payment_method_counter_1
+  #   depends_on:
+  #     rabbitmq:
+  #       condition: service_healthy
+  #   environment:
+  #     - RABBITMQ_HOST=rabbitmq
+  #     - INPUT_QUEUE=minor_transactions_5
+  #     - AGGREGATION_PREFIX=local_count_transactions
+  #     - AGGREGATION_AMOUNT=1
+  #     - CONTROL_EXCHANGE=payment_counter_control_exchange
   eof_tracker:
     build:
       context: ./src/
