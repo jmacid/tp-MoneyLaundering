@@ -3,9 +3,9 @@ from workers.dispatchers.queue_dispatcher import QueueDispatcher
 from operations.projectors.field_projector import FieldProjector
 
 Q_1 = ["client_id", "timestamp", "from_account","to_account","amount_paid", "receiving_currency", "payment_currency"]
-Q_2 = ["from_account", "to_bank", "amount_paid", "payment_currency", "receiving_currency"]
+Q_2 = ["client_id", "from_account", "to_bank", "amount_paid", "payment_currency", "receiving_currency"]
 Q_3 = ["client_id", "timestamp","from_account","payment_format","amount_paid", "payment_currency", "receiving_currency"]
-Q_4 = ["client_id","from_account","to_account"]
+Q_4 = ["client_id", "from_account","to_account"]
 Q_5 = ["client_id", "timestamp","payment_format","amount_paid","payment_currency", "amount_received", "receiving_currency"]
 
 
