@@ -114,6 +114,51 @@ services:
       - START_DATE=2022-09-01T00:15:00
       - END_DATE=2022-09-01T00:30:00
       - EOF_CONTROL_QUEUE=eof_control_queue_3
+  average_worker_1:
+    build:
+      context: ./src
+      dockerfile: operations/average/Dockerfile
+    container_name: average_worker_1
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    environment:
+      - RABBITMQ_HOST=rabbitmq
+      - INPUT_QUEUE=avg_transactions_3
+      - AGGREGATION_PREFIX=local_average_3
+      - AGGREGATION_AMOUNT=1
+      - CONTROL_EXCHANGE=average_control_exchange
+  average_aggregator_0:
+    build:
+      context: ./src
+      dockerfile: operations/aggregators/Dockerfile
+    container_name: average_aggregator_0
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    environment:
+      - PYTHONUNBUFFERED=1
+      - RABBITMQ_HOST=rabbitmq
+      - ID=0
+      - INPUT_EXCHANGE=local_average_3
+      - OUTPUT_EXCHANGE=client_average_shards_3
+      - COUNTER_AMOUNT=1
+      - JOINERS_COUNT=1
+  average_joiner_0:
+    build:
+      context: ./src
+      dockerfile: operations/joiners/Dockerfile
+    container_name: average_joiner_0
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    environment:
+      - PYTHONUNBUFFERED=1
+      - ID=0
+      - RABBITMQ_HOST=rabbitmq
+      - INPUT_EXCHANGE=client_average_shards_3
+      - OUTPUT_QUEUE=calculated_averages_3
+      - AGGREGATION_AMOUNT=1
   eof_tracker:
     build:
       context: ./src/
@@ -125,5 +170,5 @@ services:
     environment:
       - RABBITMQ_HOST=rabbitmq
       - EOF_CONTROL_QUEUE=eof_control_queue_3
-      - FINAL_QUEUE=minor_transactions_3
-      - TOPOLOGY=gateway,projection_dispatcher,currency_filter,date_range_filter
+      - FINAL_QUEUE=calculated_averages_3
+      - TOPOLOGY=gateway,projection_dispatcher,currency_filter,date_range_filter,average_worker
