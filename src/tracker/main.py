@@ -6,7 +6,7 @@ from common import middleware
 
 logging.basicConfig(level=logging.INFO)
 EOF_CONTROL_QUEUE = os.getenv("EOF_CONTROL_QUEUE", "eof_control_queue")
-FINAL_QUEUE = os.getenv("EOF_CONTROL_QUEUE", "minor_transactions")
+FINAL_QUEUE = os.getenv("FINAL_QUEUE", "minor_transactions")
 
 def get_topology():
     topology_env = os.environ["TOPOLOGY"]

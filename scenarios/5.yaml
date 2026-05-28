@@ -8,7 +8,7 @@ services:
       rabbitmq:
         condition: service_healthy
     environment:
-    - INPUT_QUEUE=minor_transactions
+    - INPUT_QUEUE=counted_transactions_5
     - MOM_HOST=rabbitmq
     - OUTPUT_QUEUE=transactions
     - PYTHONUNBUFFERED=1
