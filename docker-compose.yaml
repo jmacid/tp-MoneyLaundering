@@ -14,123 +14,39 @@ services:
     environment:
       - RABBITMQ_LOG_LEVELS=error
 
-  projection_dispatcher:
+  gateway:
+    restart: on-failure
     build:
       context: ./src/
-      dockerfile: workers/worker/Dockerfile
-    container_name: projection_dispatcher
+      dockerfile: gateway/Dockerfile
+    container_name: gateway
     depends_on:
       rabbitmq:
         condition: service_healthy
     environment:
+      - SERVER_HOST=0.0.0.0
+      - SERVER_PORT=8080
       - RABBITMQ_HOST=rabbitmq
-      - OPERATION_TYPE=projection_dispatcher
-      - INPUT_MIDDLEWARE_TYPE=queue
-      - INPUT_QUEUE=transactions
-      - OUTPUTS=q1_transactions,q2_transactions,q3_transactions,q4_transactions,q5_transactions
-      - EOF_HANDLER_QUEUE=eof_handler
+      - INPUT_QUEUE=gateway_results
+      - OUTPUT_QUEUE=transactions
 
-  # ── Query 2 ──────────────────────────────────────────────
-
-  currency_filter_q2:
+  client:
     build:
       context: ./src/
-      dockerfile: workers/worker/Dockerfile
-    deploy:
-      replicas: 3
+      dockerfile: client/Dockerfile
+    container_name: client
     depends_on:
-      rabbitmq:
-        condition: service_healthy
+      gateway:
+        condition: service_started
     environment:
-      - RABBITMQ_HOST=rabbitmq
-      - OPERATION_TYPE=currency_filter
-      - INPUT_MIDDLEWARE_TYPE=queue
-      - INPUT_QUEUE=q2_transactions
-      - OUTPUT_MIDDLEWARE_TYPE=queue
-      - OUTPUTS=USD_transactions_q2
-      - CURRENCY=US Dollar
-      - EOF_HANDLER_QUEUE=eof_handler
-
-  bank_dispatcher_q2:
-    build:
-      context: ./src/
-      dockerfile: workers/worker/Dockerfile
-    depends_on:
-      rabbitmq:
-        condition: service_healthy
-    environment:
-      - RABBITMQ_HOST=rabbitmq
-      - OPERATION_TYPE=bank_dispatcher
-      - INPUT_MIDDLEWARE_TYPE=queue
-      - INPUT_QUEUE=USD_transactions_q2
-      - OUTPUTS=bank_shard_1,bank_shard_2,bank_shard_3
-      - EOF_HANDLER_QUEUE=eof_handler
-
-  local_bank_max_aggregator_1:
-    build:
-      context: ./src/
-      dockerfile: workers/worker/Dockerfile
-    container_name: local_bank_max_aggregator_1
-    depends_on:
-      rabbitmq:
-        condition: service_healthy
-    environment:
-      - RABBITMQ_HOST=rabbitmq
-      - OPERATION_TYPE=local_bank_max_aggregator
-      - INPUT_MIDDLEWARE_TYPE=queue
-      - INPUT_QUEUE=bank_shard_1
-      - OUTPUT_QUEUE=max_bank_transactions
-      - EOF_HANDLER_QUEUE=eof_handler
-
-  local_bank_max_aggregator_2:
-    build:
-      context: ./src/
-      dockerfile: workers/worker/Dockerfile
-    container_name: local_bank_max_aggregator_2
-    depends_on:
-      rabbitmq:
-        condition: service_healthy
-    environment:
-      - RABBITMQ_HOST=rabbitmq
-      - OPERATION_TYPE=local_bank_max_aggregator
-      - INPUT_MIDDLEWARE_TYPE=queue
-      - INPUT_QUEUE=bank_shard_2
-      - OUTPUT_QUEUE=max_bank_transactions
-      - EOF_HANDLER_QUEUE=eof_handler
-
-  local_bank_max_aggregator_3:
-    build:
-      context: ./src/
-      dockerfile: workers/worker/Dockerfile
-    container_name: local_bank_max_aggregator_3
-    depends_on:
-      rabbitmq:
-        condition: service_healthy
-    environment:
-      - RABBITMQ_HOST=rabbitmq
-      - OPERATION_TYPE=local_bank_max_aggregator
-      - INPUT_MIDDLEWARE_TYPE=queue
-      - INPUT_QUEUE=bank_shard_3
-      - OUTPUT_QUEUE=max_bank_transactions
-      - EOF_HANDLER_QUEUE=eof_handler
-
-  bank_resolver:
-    build:
-      context: ./src/
-      dockerfile: workers/worker/Dockerfile
-    container_name: bank_resolver
-    depends_on:
-      rabbitmq:
-        condition: service_healthy
-    environment:
-      - RABBITMQ_HOST=rabbitmq
-      - OPERATION_TYPE=bank_resolver
-      - INPUT_MIDDLEWARE_TYPE=queue
-      - INPUT_QUEUE=max_bank_transactions
-      - OUTPUT_QUEUE=bank_max_transactions
-      - EOF_HANDLER_QUEUE=eof_handler
+      - SERVER_HOST=gateway
+      - SERVER_PORT=8080
+      - INPUT_FILE=/home/martin/Desktop/tp-sd/tp-MoneyLaundering/data/transactions.csv
+    volumes:
+      - ./data:/data
 
   eof_handler:
+    restart: on-failure
     build:
       context: ./src/
       dockerfile: eof_handler/Dockerfile
@@ -141,12 +57,180 @@ services:
     environment:
       - RABBITMQ_HOST=rabbitmq
       - EOF_HANDLER_QUEUE=eof_handler
-      - GATEWAY_QUEUE=gateway
-      - PIPELINE_CONFIG=eof_handler/pipeline_config.yaml
+      - GATEWAY_QUEUE=gateway_results
+      - PIPELINE_CONFIG=/app/eof_handler/pipeline_config.yaml
 
-  # ───────────────────────────────────────
+  # ── Query 1 ──────────────────────────────────────────────────────────────
+  projection_dispatcher:
+    restart: on-failure
+    build:
+      context: ./src/
+      dockerfile: workers/worker/Dockerfile
+    container_name: projection_dispatcher
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    environment:
+      - RABBITMQ_HOST=rabbitmq
+      - OPERATION_TYPE=projection_dispatcher
+      - INPUT_QUEUE=transactions
+      - OUTPUTS=minor_query,max_query,avg_query,scatter_gather_query,count_query
+      - EOF_HANDLER_QUEUE=eof_handler
+      - NODE_NAME=projection_dispatcher
 
+  currency_filter_q1:
+    restart: on-failure
+    build:
+      context: ./src/
+      dockerfile: workers/worker/Dockerfile
+    container_name: currency_filter_q1
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    environment:
+      - RABBITMQ_HOST=rabbitmq
+      - OPERATION_TYPE=currency_filter
+      - INPUT_QUEUE=minor_query
+      - OUTPUT_MIDDLEWARE_TYPE=queue
+      - OUTPUTS=minor_usd_transactions
+      - CURRENCY=USD
+      - EOF_HANDLER_QUEUE=eof_handler
+      - NODE_NAME=currency_filter_q1
+
+  amount_filter_q1:
+    restart: on-failure
+    build:
+      context: ./src/
+      dockerfile: workers/worker/Dockerfile
+    container_name: amount_filter_q1
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    environment:
+      - RABBITMQ_HOST=rabbitmq
+      - OPERATION_TYPE=amount_filter
+      - INPUT_QUEUE=minor_usd_transactions
+      - OUTPUT_MIDDLEWARE_TYPE=queue
+      - OUTPUTS=minor_transactions
+      - MAXIMUM_AMOUNT=50
+      - EOF_HANDLER_QUEUE=eof_handler
+      - NODE_NAME=amount_filter_q1
+      - AMOUNT=50
+      - FILTER_MODE=lt
+
+  # ── Query 2 ──────────────────────────────────────────────────────────────
+  currency_filter_q2:
+    restart: on-failure
+    build:
+      context: ./src/
+      dockerfile: workers/worker/Dockerfile
+    container_name: currency_filter_q2
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    environment:
+      - RABBITMQ_HOST=rabbitmq
+      - OPERATION_TYPE=currency_filter
+      - INPUT_QUEUE=max_query
+      - OUTPUT_MIDDLEWARE_TYPE=queue
+      - OUTPUTS=max_usd_transactions
+      - CURRENCY=USD
+      - EOF_HANDLER_QUEUE=eof_handler
+      - NODE_NAME=currency_filter_q2
+
+  bank_dispatcher:
+    restart: on-failure
+    build:
+      context: ./src/
+      dockerfile: workers/worker/Dockerfile
+    container_name: bank_dispatcher
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    environment:
+      - RABBITMQ_HOST=rabbitmq
+      - OPERATION_TYPE=bank_dispatcher
+      - INPUT_QUEUE=max_usd_transactions
+      - OUTPUTS=bank_shard_0,bank_shard_1,bank_shard_2
+      - EOF_HANDLER_QUEUE=eof_handler
+      - NODE_NAME=bank_dispatcher
+      - QUERY_ID=query_2
+
+  local_bank_max_aggregator_0:
+    restart: on-failure
+    build:
+      context: ./src/
+      dockerfile: workers/worker/Dockerfile
+    container_name: local_bank_max_aggregator_0
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    environment:
+      - RABBITMQ_HOST=rabbitmq
+      - OPERATION_TYPE=local_bank_max_aggregator
+      - INPUT_QUEUE=bank_shard_0
+      - OUTPUT_MIDDLEWARE_TYPE=queue
+      - OUTPUTS=partial_max_results
+      - EOF_HANDLER_QUEUE=eof_handler
+      - NODE_NAME=local_bank_max_aggregator
+
+  local_bank_max_aggregator_1:
+    restart: on-failure
+    build:
+      context: ./src/
+      dockerfile: workers/worker/Dockerfile
+    container_name: local_bank_max_aggregator_1
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    environment:
+      - RABBITMQ_HOST=rabbitmq
+      - OPERATION_TYPE=local_bank_max_aggregator
+      - INPUT_QUEUE=bank_shard_1
+      - OUTPUT_MIDDLEWARE_TYPE=queue
+      - OUTPUTS=partial_max_results
+      - EOF_HANDLER_QUEUE=eof_handler
+      - NODE_NAME=local_bank_max_aggregator
+
+  local_bank_max_aggregator_2:
+    restart: on-failure
+    build:
+      context: ./src/
+      dockerfile: workers/worker/Dockerfile
+    container_name: local_bank_max_aggregator_2
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    environment:
+      - RABBITMQ_HOST=rabbitmq
+      - OPERATION_TYPE=local_bank_max_aggregator
+      - INPUT_QUEUE=bank_shard_2
+      - OUTPUT_MIDDLEWARE_TYPE=queue
+      - OUTPUTS=partial_max_results
+      - EOF_HANDLER_QUEUE=eof_handler
+      - NODE_NAME=local_bank_max_aggregator
+
+  bank_resolver:
+    restart: on-failure
+    build:
+      context: ./src/
+      dockerfile: workers/worker/Dockerfile
+    container_name: bank_resolver
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    environment:
+      - RABBITMQ_HOST=rabbitmq
+      - OPERATION_TYPE=bank_resolver
+      - INPUT_QUEUE=partial_max_results
+      - OUTPUT_MIDDLEWARE_TYPE=queue
+      - OUTPUTS=gateway_results
+      - EOF_HANDLER_QUEUE=eof_handler
+      - NODE_NAME=bank_resolver
+
+  # ── Query 5 ──────────────────────────────────────────────────────────────
   date_range_filter:
+    restart: on-failure
     build:
       context: ./src/
       dockerfile: workers/worker/Dockerfile
@@ -157,10 +241,89 @@ services:
     environment:
       - RABBITMQ_HOST=rabbitmq
       - OPERATION_TYPE=date_range_filter
-      - INPUT_MIDDLEWARE_TYPE=queue
       - INPUT_QUEUE=count_query
       - OUTPUT_MIDDLEWARE_TYPE=queue
       - OUTPUTS=range_transactions
-      - START_DATE=2026-01-01T00:00:00
-      - END_DATE=2026-12-31T23:59:59
+      - START_DATE=2022-09-01T00:00:00
+      - END_DATE=2022-09-05T23:59:59
       - EOF_HANDLER_QUEUE=eof_handler
+      - NODE_NAME=date_range_filter
+
+  payment_method_filter:
+    restart: on-failure 
+    build:
+      context: ./src/
+      dockerfile: workers/worker/Dockerfile
+    container_name: payment_method_filter
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    environment:
+      - RABBITMQ_HOST=rabbitmq
+      - OPERATION_TYPE=payment_method_filter
+      - INPUT_QUEUE=range_transactions
+      - OUTPUT_MIDDLEWARE_TYPE=queue
+      - OUTPUTS=filtered_payments
+      - PAYMENT_METHODS=Wire,ACH
+      - EOF_HANDLER_QUEUE=eof_handler
+      - NODE_NAME=payment_method_filter
+
+  currency_normalizer:
+    restart: on-failure
+    build:
+      context: ./src/
+      dockerfile: workers/worker/Dockerfile
+    container_name: currency_normalizer
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    environment:
+      - RABBITMQ_HOST=rabbitmq
+      - OPERATION_TYPE=currency_normalizer
+      - INPUT_QUEUE=filtered_payments
+      - OUTPUT_MIDDLEWARE_TYPE=queue
+      - OUTPUTS=normalized_payments
+      - TARGET_CURRENCY=USD
+      - EOF_HANDLER_QUEUE=eof_handler
+      - NODE_NAME=currency_normalizer
+    
+  amount_filter_q5:
+    restart: on-failure
+    build:
+      context: ./src/
+      dockerfile: workers/worker/Dockerfile
+    container_name: amount_filter_q5
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    environment:
+      - RABBITMQ_HOST=rabbitmq
+      - OPERATION_TYPE=amount_filter
+      - INPUT_QUEUE=normalized_payments
+      - OUTPUT_MIDDLEWARE_TYPE=queue
+      - OUTPUTS=minor_usd_payments
+      - AMOUNT=1
+      - FILTER_MODE=lt
+      - EOF_HANDLER_QUEUE=eof_handler
+      - NODE_NAME=amount_filter_q5
+
+  payment_method_counter:
+    restart: on-failure
+    build:
+      context: ./src/
+      dockerfile: workers/worker/Dockerfile
+    container_name: payment_method_counter
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    environment:
+      - RABBITMQ_HOST=rabbitmq
+      - OPERATION_TYPE=payment_method_counter
+      - INPUT_QUEUE=minor_usd_payments
+      - OUTPUT_MIDDLEWARE_TYPE=queue
+      - OUTPUTS=gateway_results
+      - MAXIMUM_AMOUNT=1
+      - EOF_HANDLER_QUEUE=eof_handler
+      - NODE_NAME=payment_method_counter
+      - AMOUNT=1
+      - FILTER_MODE=lt

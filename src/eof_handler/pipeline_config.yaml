@@ -1,26 +1,79 @@
 queries:
+  query_1:
+    pipeline:
+      - name: projection_dispatcher
+        instances: 1
+        stateful: false
+        eof_queue: eof_handler
+        ready_queue: eof_handler
+      - name: currency_filter_q1
+        instances: 1
+        stateful: false
+        eof_queue: eof_handler
+        ready_queue: eof_handler
+      - name: amount_filter_q1
+        instances: 1
+        stateful: false
+        eof_queue: eof_handler
+        ready_queue: eof_handler
+
   query_2:
     pipeline:
       - name: projection_dispatcher
-        instances: 2
+        instances: 1
         stateful: false
-        eof_queue: eof_projection_dispatcher_q2
-        ready_queue: ready_projection_dispatcher_q2
-
+        eof_queue: eof_handler
+        ready_queue: eof_handler
       - name: currency_filter_q2
-        instances: 3
+        instances: 1
         stateful: false
-        eof_queue: eof_currency_filter_q2
-        ready_queue: ready_currency_filter_q2
-
+        eof_queue: eof_handler
+        ready_queue: eof_handler
+      - name: bank_dispatcher
+        instances: 1
+        stateful: false
+        eof_queue: eof_handler
+        ready_queue: eof_handler
       - name: local_bank_max_aggregator
-        instances: 2
+        instances: 3
         stateful: true
-        eof_queue: eof_local_bank_max_aggregator
-        ready_queue: ready_local_bank_max_aggregator
-
+        eof_queue: eof_handler
+        ready_queue: eof_handler
       - name: bank_resolver
         instances: 1
         stateful: true
-        eof_queue: eof_bank_resolver
-        ready_queue: ready_bank_resolver
+        eof_queue: eof_handler
+        ready_queue: eof_handler
+
+  query_5:
+    pipeline:
+      - name: projection_dispatcher
+        instances: 1
+        stateful: false
+        eof_queue: eof_handler
+        ready_queue: eof_handler
+      - name: date_range_filter
+        instances: 1
+        stateful: false
+        eof_queue: eof_handler
+        ready_queue: eof_handler
+      - name: payment_method_filter
+        instances: 1
+        stateful: false
+        eof_queue: eof_handler
+        ready_queue: eof_handler
+      - name: currency_normalizer
+        instances: 1
+        stateful: false
+        eof_queue: eof_handler
+        ready_queue: eof_handler
+      - name: amount_filter_q5
+        instances: 1
+        stateful: false
+        eof_queue: eof_handler
+        ready_queue: eof_handler
+      - name: payment_method_counter
+        instances: 1
+        stateful: true
+        eof_queue: eof_handler
+        ready_queue: eof_handler

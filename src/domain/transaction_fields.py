@@ -1,4 +1,5 @@
 TRANSACTION_FIELDS = {
+    "client_id",  
     "timestamp",
     "from_bank",
     "from_account",

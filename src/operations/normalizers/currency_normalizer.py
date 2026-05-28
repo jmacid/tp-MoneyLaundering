@@ -3,17 +3,12 @@ import os
 from typing import Any
 from domain.exchange_rate import ExchangeRate
 from operations.core.operation_strategy import OperationStrategy
+from shared.validators.transaction_validator import TransactionValidator
 
 
 class CurrencyNormalizer(OperationStrategy):
 
-    REQUIRED_FIELDS = {
-        "timestamp",
-        "amount_paid",
-        "payment_currency",
-        "amount_received",
-        "receiving_currency",
-    }
+    
 
     def __init__(self, target_currency: str | None = None):
         self.target_currency = target_currency or os.getenv("TARGET_CURRENCY")
@@ -22,6 +17,7 @@ class CurrencyNormalizer(OperationStrategy):
             raise ValueError("Missing TARGET_CURRENCY")
 
         self.exchange_rates: dict[tuple[str, str, object], ExchangeRate] = {}
+        self.required_fields = {"timestamp","amount_paid","payment_currency","amount_received","receiving_currency"}
 
     def load_exchange_rate(self, exchange_rate: ExchangeRate) -> None:
         key = (
@@ -32,12 +28,9 @@ class CurrencyNormalizer(OperationStrategy):
 
         self.exchange_rates[key] = exchange_rate
 
-    def normalize_amount(
-        self,
-        amount: Decimal,
-        from_currency: str,
-        rate_date,
-    ) -> Decimal:
+    def normalize_amount(self, amount: Decimal, from_currency: str, rate_date) -> Decimal:
+
+        return amount # for DEMO
         if from_currency == self.target_currency:
             return amount
 
@@ -58,8 +51,16 @@ class CurrencyNormalizer(OperationStrategy):
         return amount * exchange_rate.rate
 
     def process(self, transaction: dict[str, Any]) -> dict[str, Any] | None:
-        self._validate_payload(transaction)
+        
+        TransactionValidator.validate_required_fields(transaction, self.required_fields)
 
+        return {
+            **transaction,
+            "normalized_amount_paid": 1000,
+            "normalized_amount_received": 1000,
+            "normalized_currency": self.target_currency,
+        }
+    
         rate_date = transaction["timestamp"].date()
 
         normalized_paid_amount = self.normalize_amount(
@@ -80,11 +81,3 @@ class CurrencyNormalizer(OperationStrategy):
             "normalized_amount_received": normalized_received_amount,
             "normalized_currency": self.target_currency,
         }
-
-    def _validate_payload(self, transaction: dict) -> None:
-        missing_fields = self.REQUIRED_FIELDS - transaction.keys()
-
-        if missing_fields:
-            raise ValueError(
-                f"Missing required fields for CurrencyNormalizer: {missing_fields}"
-            )

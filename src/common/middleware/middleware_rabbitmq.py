@@ -1,13 +1,22 @@
 import pika
 from .middleware import MessageMiddlewareQueue, MessageMiddlewareExchange
+import time
 
 class MessageMiddlewareQueueRabbitMQ(MessageMiddlewareQueue):
 
-    def __init__(self, host, queue_name):
-        connection = pika.BlockingConnection(pika.ConnectionParameters(host))
-        self.ch = connection.channel()
-        self.queue_name = queue_name
-        self.ch.queue_declare(queue=queue_name, durable=True, arguments={'x-queue-type': 'quorum'})
+    def __init__(self, host, queue_name, retries=10, delay=5):
+        for attempt in range(retries):
+            try:
+                connection = pika.BlockingConnection(pika.ConnectionParameters(host))
+                self.ch = connection.channel()
+                self.queue_name = queue_name
+                self.ch.queue_declare(queue=queue_name, durable=True, arguments={'x-queue-type': 'quorum'})
+                return
+            except Exception as e:
+                if attempt < retries - 1:
+                    time.sleep(delay)
+                else:
+                    raise
 
     def close(self):
         self.ch.close()

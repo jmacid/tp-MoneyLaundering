@@ -2,7 +2,7 @@ import json
 import os
 import logging
 from typing import Any
-from middleware.middleware_rabbitmq import MessageMiddlewareQueueRabbitMQ
+from common.middleware.middleware_rabbitmq import MessageMiddlewareQueueRabbitMQ
 from domain.message_type import MessageType
 
 class BankResolver:

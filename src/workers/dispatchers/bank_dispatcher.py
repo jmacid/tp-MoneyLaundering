@@ -1,7 +1,7 @@
 import json
 import os
 from typing import Any
-from middleware.middleware_rabbitmq import MessageMiddlewareQueueRabbitMQ
+from common.middleware.middleware_rabbitmq import MessageMiddlewareQueueRabbitMQ
 from domain.message_type import MessageType
 import hashlib
 
@@ -30,3 +30,13 @@ class BankDispatcher:
         shard_queue = self._get_shard(transaction["from_bank"])
         message = {"type": MessageType.TRANSACTION, **transaction}
         self.middlewares[shard_queue].send(json.dumps(message))
+
+    def flush(self, client_id: str) -> None:
+        query_id = os.getenv("QUERY_ID")
+        eof_message = json.dumps({
+            "type": MessageType.EOF,
+            "client_id": client_id,
+            "query_id": query_id,
+        }).encode()
+        for queue_middleware in self.middlewares.values():
+            queue_middleware.send(eof_message)

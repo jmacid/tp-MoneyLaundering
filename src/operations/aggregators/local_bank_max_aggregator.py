@@ -2,7 +2,7 @@ import json
 import os
 from typing import Any
 from domain.message_type import MessageType
-from middleware.middleware_rabbitmq import MessageMiddlewareQueueRabbitMQ
+from common.middleware.middleware_rabbitmq import MessageMiddlewareQueueRabbitMQ
 
 class LocalBankMaxAggregator:
     def __init__(self):

@@ -6,8 +6,8 @@ from operations.filters.payment_method_filter import PaymentMethodFilter
 from operations.normalizers.currency_normalizer import CurrencyNormalizer
 from operations.aggregators.local_bank_max_aggregator import LocalBankMaxAggregator
 from operations.resolver.bank_resolver import BankResolver
-from dispatchers.projection_dispatcher import ProjectionDispatcher
-from dispatchers.bank_dispatcher import BankDispatcher
+from workers.dispatchers.projection_dispatcher import ProjectionDispatcher
+from workers.dispatchers.bank_dispatcher import BankDispatcher
 
 class OperationFactory:
 

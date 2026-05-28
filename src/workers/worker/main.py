@@ -1,15 +1,22 @@
+# workers/worker/main.py
 import json
+import logging
 import os
 import signal
-import logging
-from dispatchers.exchange_dispatcher import ExchangeDispatcher
-from dispatchers.projection_dispatcher import ProjectionDispatcher
-from dispatchers.queue_dispatcher import QueueDispatcher
+from typing import Any
+
+from workers.consumers.queue_consumer import QueueConsumer
+from workers.dispatchers.queue_dispatcher import QueueDispatcher
+from workers.dispatchers.projection_dispatcher import ProjectionDispatcher
+from workers.dispatchers.bank_dispatcher import BankDispatcher
 from operations.core.operation_factory import OperationFactory
 from domain.message_type import MessageType
-from middleware.middleware_rabbitmq import MessageMiddlewareQueueRabbitMQ
+from common.middleware.middleware_rabbitmq import MessageMiddlewareQueueRabbitMQ
 
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(message)s",
+)
 
 ALLOWED_OPERATIONS = [
     "currency_filter",
@@ -21,8 +28,10 @@ ALLOWED_OPERATIONS = [
     "projection_dispatcher",
     "bank_dispatcher",
     "local_bank_max_aggregator",
-    "bank_resolver"
+    "bank_resolver",
 ]
+
+SELF_DISPATCHING_OPERATIONS = {"projection_dispatcher", "bank_dispatcher", "payment_method_counter"}
 
 running = True
 
@@ -33,93 +42,79 @@ def handle_sigterm(sig, frame):
 
 signal.signal(signal.SIGTERM, handle_sigterm)
 
+
 def build_operation():
     operation_type = os.getenv("OPERATION_TYPE")
     if operation_type is None:
         raise ValueError("Missing environment variable: OPERATION_TYPE")
-    elif operation_type not in ALLOWED_OPERATIONS:
+    if operation_type not in ALLOWED_OPERATIONS:
         raise ValueError(f"Unsupported operation type: {operation_type}")
-    elif operation_type == "projection_dispatcher":
+    if operation_type == "projection_dispatcher":
         return ProjectionDispatcher()
+    if operation_type == "bank_dispatcher":
+        return BankDispatcher()
     return OperationFactory.create(operation_type)
 
-def initialize_dispatcher():
-    middleware_type = os.getenv("OUTPUT_MIDDLEWARE_TYPE", "queue")
-    if middleware_type == "queue":
-        return QueueDispatcher()
-    if middleware_type == "exchange":
-        return ExchangeDispatcher()
-    raise ValueError(f"Unsupported OUTPUT_MIDDLEWARE_TYPE: {middleware_type}")
 
-def initialize_input_middleware():
-    queue_name = os.getenv("INPUT_QUEUE")
-    if not queue_name:
-        raise ValueError("Missing INPUT_QUEUE environment variable")
-    return MessageMiddlewareQueueRabbitMQ(
-        host=os.getenv("RABBITMQ_HOST", "rabbitmq"),
-        queue_name=queue_name,
-    )
+def initialize_dispatcher():
+    operation_type = os.getenv("OPERATION_TYPE")
+    if operation_type in SELF_DISPATCHING_OPERATIONS:
+        return None
+    return QueueDispatcher()
+
 
 def initialize_eof_middleware():
-    eof_handler_queue = os.getenv("EOF_HANDLER_QUEUE")
-    if not eof_handler_queue:
-        raise ValueError("Missing EOF_HANDLER_QUEUE environment variable")
+    eof_queue = os.getenv("EOF_HANDLER_QUEUE")
+    if not eof_queue:
+        raise ValueError("Missing EOF_HANDLER_QUEUE")
     return MessageMiddlewareQueueRabbitMQ(
         host=os.getenv("RABBITMQ_HOST", "rabbitmq"),
-        queue_name=eof_handler_queue,
+        queue_name=eof_queue,
     )
 
-def handle_eof(message: dict, operation, eof_middleware) -> None:
-    client_id = message.get("client_id")
-    query_id = message.get("query_id")
-    node_name = os.getenv("OPERATION_TYPE")
 
-    # Si la operacion tiene estado, hacer flush pasando el client_id
-    if hasattr(operation, "flush"):
-        logging.info(f"Flushing operation for client {client_id} query {query_id}")
-        operation.flush(client_id)
-
-    # Responder Ready al EOF Handler
-    ready_message = json.dumps({
+def send_ready(eof_middleware, client_id: str, query_id: str) -> None:
+    message = json.dumps({
         "type": "ready",
         "client_id": client_id,
         "query_id": query_id,
-        "node_name": node_name,
+        "node_name": os.getenv("NODE_NAME"),
     })
-    eof_middleware.send(ready_message)
-    logging.info(f"Sent Ready for client {client_id} query {query_id}")
+    eof_middleware.send(message)
+    logging.info(f"Sent READY for client {client_id} query {query_id}")
+
 
 def main():
     operation = build_operation()
-    dispatcher = (
-        None
-        if isinstance(operation, ProjectionDispatcher)
-        else initialize_dispatcher()
-    )
-    input_middleware = initialize_input_middleware()
+    dispatcher = initialize_dispatcher()
+    consumer = QueueConsumer()
     eof_middleware = initialize_eof_middleware()
 
-    logging.info(f"Initialized successfully operation: {os.getenv('OPERATION_TYPE')}")
+    operation_type = os.getenv("OPERATION_TYPE")
+    logging.info(f"Initialized successfully operation: {operation_type}")
 
-    while running:
-        message = input_middleware.consume()
-        if message is None:
-            continue
-
+    def handle_message(message: dict[str, Any]) -> None:
         msg_type = message.get("type")
 
-        if msg_type == MessageType.TRANSACTION:
-            result = operation.process(message)
-            if dispatcher is not None and result is not None:
-                dispatcher.process([result])
+        if msg_type == MessageType.EOF:
+            client_id = message.get("client_id")
+            query_id = message.get("query_id")
+            if hasattr(operation, "flush"):
+                operation.flush(client_id)  # flush solo recibe client_id
+            send_ready(eof_middleware, client_id, query_id)
+            return
 
-        elif msg_type == MessageType.EOF:
-            handle_eof(message, operation, eof_middleware)
+        if operation_type in SELF_DISPATCHING_OPERATIONS:
+            operation.process(message)
+            return
 
-        else:
-            logging.warning(f"Unknown message type: {msg_type}")
+        result = operation.process(message)
+        if result is None:
+            return
+        dispatcher.process([result])
 
-    logging.info("Worker shutting down cleanly")
+    consumer.start(handle_message)
+
 
 if __name__ == "__main__":
     main()

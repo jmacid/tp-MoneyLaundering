@@ -1,6 +1,7 @@
 import os
 from typing import Any
 from operations.core.operation_strategy import OperationStrategy
+from shared.validators.transaction_validator import TransactionValidator
 
 class CurrencyFilter(OperationStrategy):
 
@@ -8,10 +9,13 @@ class CurrencyFilter(OperationStrategy):
         self.currency = currency or os.getenv("CURRENCY")
 
         if not self.currency:
-            raise ValueError(
-                "Currency not provided and CURRENCY env var is not defined"
-            )
+            raise ValueError("Currency not provided and CURRENCY env var is not defined")
+        
+        self.required_fields = ["payment_currency", "receiving_currency"]
 
     def process(self, transaction: dict[str, Any]) -> dict[str, Any] | None:
-        if transaction["payment_currency"] == self.currency:
+
+        TransactionValidator.validate_required_fields(transaction, self.required_fields)
+
+        if transaction["payment_currency"] == self.currency or transaction["receiving_currency"] == self.currency:
             return transaction
