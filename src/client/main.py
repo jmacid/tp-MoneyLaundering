@@ -11,7 +11,7 @@ SERVER_PORT = int(os.environ["SERVER_PORT"])
 INPUT_FILE = os.environ["INPUT_FILE"]
 OUTPUT_FILE_MINOR_RESULT = os.environ["OUTPUT_FILE_MINOR_RESULT"]
 
-ROW_LIMIT = 1500 #None
+ROW_LIMIT = 7500 #None
 
 class Client:
     def __init__(self):

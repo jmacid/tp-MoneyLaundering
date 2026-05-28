@@ -5,12 +5,14 @@ from workers.consumers.queue_consumer import QueueConsumer
 from workers.dispatchers.exchange_dispatcher import ExchangeDispatcher
 from workers.dispatchers.projection_dispatcher import ProjectionDispatcher
 from workers.dispatchers.queue_dispatcher import QueueDispatcher
+from workers.dispatchers.sharding_dispatcher import ShardingDispatcher
 from operations.core.operation_factory import OperationFactory
 import json
 from common import middleware
 
 ALLOWED_OPERATIONS = ["currency_filter","amount_filter","date_range_filter","payment_method_filter",
-                      "payment_method_counter","currency_normalizer", "projection_dispatcher", "bank_dispatcher"]
+                      "payment_method_counter","currency_normalizer", "projection_dispatcher","bank_dispatcher",
+                       "destination_filter", "scatter_gather_detector"]
 
 logging.basicConfig(
     level=logging.INFO,
@@ -40,6 +42,9 @@ def initialize_dispatcher():
 
     if middleware_type == "exchange":
         return ExchangeDispatcher()
+
+    if middleware_type == "sharding_exchange":
+        return ShardingDispatcher()
 
     raise ValueError(
         f"Unsupported OUTPUT_MIDDLEWARE_TYPE: {middleware_type}"
@@ -80,7 +85,8 @@ def main():
         # logging.info("Processing transaction: %s", transaction)
 
         result = operation.process(transaction)
-        # logging.info(f"Processed transaction result: {result}")
+        if result is not None:
+            logging.info(f"Processed transaction result: {result}")
 
         if result is not None and dispatcher is not None:
             dispatcher.process([result])
