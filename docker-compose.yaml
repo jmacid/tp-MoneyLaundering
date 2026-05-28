@@ -74,11 +74,41 @@ services:
       - OPERATION_TYPE=currency_filter
       - INPUT_MIDDLEWARE_TYPE=queue
       - INPUT_QUEUE=max_query
-      - OUTPUT_MIDDLEWARE_TYPE=sharding_exchange
-      - OUTPUT_EXCHANGE=bank_shards
+      - OUTPUT_MIDDLEWARE_TYPE=queue
+      - OUTPUTS=to_bank_dispatcher_queue_2
       - CURRENCY=US Dollar
-      - SHARDS_COUNT=1
-      - SHARDING_KEY_FIELD=to_bank
+      - EOF_CONTROL_QUEUE=eof_control_queue_2
+  # bank_resolver_1:
+  #   build:
+  #     context: ./src/
+  #     dockerfile: workers/resolver/Dockerfile
+  #   container_name: bank_resolver_1
+  #   depends_on:
+  #     rabbitmq:
+  #       condition: service_healthy
+  #   environment:
+  #     - PYTHONUNBUFFERED=1
+  #     - RABBITMQ_HOST=rabbitmq
+  #     - ID=0
+  #     - INPUT_EXCHANGE=max_bank_transactions
+  #     - OUTPUT_QUEUE=transactions
+  #     - AGGREGATORS_COUNT=1
+  bank_dispatcher_1:
+    build:
+      context: ./src
+      dockerfile: workers/worker/Dockerfile
+    container_name: bank_dispatcher_1
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    environment:
+      - RABBITMQ_HOST=rabbitmq
+      - OPERATION_TYPE=bank_dispatcher
+      - OUTPUT_MIDDLEWARE_TYPE=none
+      - INPUT_MIDDLEWARE_TYPE=queue
+      - INPUT_QUEUE=to_bank_dispatcher_queue_2
+      - OUTPUT_EXCHANGE=bank_shards_2
+      - AGGREGATORS_COUNT=2
       - EOF_CONTROL_QUEUE=eof_control_queue_2
   local_bank_max_aggregator_0:
     build:
@@ -93,25 +123,10 @@ services:
       - PYTHONUNBUFFERED=1
       - RABBITMQ_HOST=rabbitmq
       - ID=0
-      - INPUT_EXCHANGE=bank_shards
+      - INPUT_EXCHANGE=bank_shards_2
       - OUTPUT_EXCHANGE=max_bank_transactions
       - DISPATCHERS_AMOUNT=1
       - RESOLVERS_COUNT=1
-  bank_resolver_1:
-    build:
-      context: ./src/
-      dockerfile: workers/resolver/Dockerfile
-    container_name: bank_resolver_1
-    depends_on:
-      rabbitmq:
-        condition: service_healthy
-    environment:
-      - PYTHONUNBUFFERED=1
-      - RABBITMQ_HOST=rabbitmq
-      - ID=0
-      - INPUT_EXCHANGE=max_bank_transactions
-      - OUTPUT_QUEUE=transactions
-      - AGGREGATORS_COUNT=1
   eof_tracker:
     build:
       context: ./src/
@@ -123,5 +138,5 @@ services:
     environment:
       - RABBITMQ_HOST=rabbitmq
       - EOF_CONTROL_QUEUE=eof_control_queue_2
-      - FINAL_QUEUE=avg_transactions_3
+      - FINAL_QUEUE=to_bank_dispatcher_queue
       - TOPOLOGY=gateway,projection_dispatcher,currency_filter

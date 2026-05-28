@@ -8,6 +8,7 @@ from workers.dispatchers.queue_dispatcher import QueueDispatcher
 from workers.dispatchers.sharding_dispatcher import ShardingDispatcher
 from operations.core.operation_factory import OperationFactory
 from workers.dispatchers.broadcast_dispatcher import BroadcastDispatcher
+from workers.dispatchers.bank_dispatcher import BankDispatcher
 import json
 from common import middleware
 
@@ -32,11 +33,16 @@ def build_operation():
         raise ValueError(f"Unsupported operation type: {operation_type}")
     elif operation_type == "projection_dispatcher":
         return ProjectionDispatcher()
-    
+    elif operation_type == "bank_dispatcher":
+        return BankDispatcher()
+
     return OperationFactory.create(operation_type)
 
 def initialize_dispatcher():
     middleware_type = os.getenv("OUTPUT_MIDDLEWARE_TYPE", "queue")
+
+    if middleware_type == "none":
+        return None
 
     if middleware_type == "queue":
         return QueueDispatcher()
