@@ -14,7 +14,7 @@ services:
     - PYTHONUNBUFFERED=1
     - SERVER_HOST=gateway
     - SERVER_PORT=5678
-    - EOF_CONTROL_QUEUE=eof_control_queue
+    - EOF_CONTROL_QUEUE=eof_control_queue_4
   client_1:
     build:
       context: ./src/
@@ -78,7 +78,7 @@ services:
       - OUTPUT_MIDDLEWARE_TYPE=queue
       - OUTPUTS=USD_transactions_4
       - CURRENCY=US Dollar
-      - EOF_CONTROL_QUEUE=eof_control_queue
+      - EOF_CONTROL_QUEUE=eof_control_queue_4
   date_range_filter_1:
     build:
       context: ./src/
