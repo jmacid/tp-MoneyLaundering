@@ -317,7 +317,6 @@ services:
     build:
       context: ./src
       dockerfile: operations/counters/Dockerfile
-    # command: ["python3", "-m", "operations.counters.payment_method_counter_main"]
     container_name: payment_method_counter_1
     depends_on:
       rabbitmq:
@@ -325,9 +324,24 @@ services:
     environment:
       - RABBITMQ_HOST=rabbitmq
       - INPUT_QUEUE=minor_transactions_5
-      - AGGREGATION_PREFIX=local_count_transactions
+      - AGGREGATION_PREFIX=local_count_transactions_5
       - AGGREGATION_AMOUNT=1
       - CONTROL_EXCHANGE=payment_counter_control_exchange
+  payment_method_aggregator_0:
+    build:
+      context: ./src
+      dockerfile: operations/aggregators/Dockerfile
+    container_name: payment_method_aggregator_0
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    environment:
+      - PYTHONUNBUFFERED=1
+      - RABBITMQ_HOST=rabbitmq
+      - ID=0
+      - INPUT_EXCHANGE=local_count_transactions_5
+      - OUTPUT_QUEUE=client_count_shards_5
+      - COUNTER_AMOUNT=1
   eof_tracker:
     build:
       context: ./src/
