@@ -23,7 +23,8 @@ services:
     depends_on:
       - gateway
     environment:
-    - INPUT_FILE=/datasets/HI-Small_Trans.csv
+    # - INPUT_FILE=/datasets/HI-Small_Trans.csv
+    - INPUT_FILE=/datasets/sc.csv
     - SERVER_HOST=gateway
     - SERVER_PORT=5678
     - OUTPUT_FILE_MINOR_RESULT=/output/client_1_minor_result.csv
@@ -60,7 +61,7 @@ services:
       - INPUT_MIDDLEWARE_TYPE=queue
       - INPUT_QUEUE=transactions
       - OUTPUTS=minor_query,max_query,avg_query,scatter_gather_query,count_query
-      - EOF_CONTROL_QUEUE=eof_control_queue_5
+      - EOF_CONTROL_QUEUE=eof_control_queue_4
   currency_filter_1:
     build:
       context: ./src/
@@ -95,7 +96,7 @@ services:
       - OUTPUTS=account_shards_4
       - START_DATE=2022-09-01T00:15:00
       - END_DATE=2022-09-01T00:30:00
-      - EOF_CONTROL_QUEUE=eof_control_queue_5
+      - EOF_CONTROL_QUEUE=eof_control_queue_4
   destination_filter_1:
     build:
       context: ./src/
@@ -112,7 +113,7 @@ services:
       - OUTPUT_MIDDLEWARE_TYPE=queue
       - OUTPUTS=bridge_account_shards_4
       - DESTINATION_ACC_REQUIRED=3
-      - EOF_CONTROL_QUEUE=eof_control_queue_5
+      - EOF_CONTROL_QUEUE=eof_control_queue_4
 
   scatter_gather_detector_1:
     build:
@@ -127,7 +128,7 @@ services:
       - OPERATION_TYPE=scatter_gather_detector
       - INPUT_QUEUE=bridge_account_shards_4
       - OUTPUT_QUEUE=scatter_gather_accounts_4
-      - EOF_CONTROL_QUEUE=eof_control_queue_5
+      - EOF_CONTROL_QUEUE=eof_control_queue_4
 
   eof_tracker:
     build:
@@ -139,6 +140,6 @@ services:
         condition: service_healthy
     environment:
       - RABBITMQ_HOST=rabbitmq
-      - EOF_CONTROL_QUEUE=eof_control_queue_5
-      - FINAL_QUEUE=minor_transactions_5
-      - TOPOLOGY=gateway,projection_dispatcher,currency_filter,date_range_filter,destination_filter,scatter_gather_detector
+      - EOF_CONTROL_QUEUE=eof_control_queue_4
+      - FINAL_QUEUE=bridge_account_shards_4
+      - TOPOLOGY=gateway,projection_dispatcher,currency_filter,date_range_filter,destination_filter

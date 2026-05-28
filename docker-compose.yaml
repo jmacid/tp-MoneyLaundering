@@ -115,20 +115,20 @@ services:
       - DESTINATION_ACC_REQUIRED=3
       - EOF_CONTROL_QUEUE=eof_control_queue_4
 
-  # scatter_gather_detector_1:
-  #   build:
-  #     context: ./src/
-  #     dockerfile: operations/scatter_gather/Dockerfile
-  #   container_name: scatter_gather_detector_1
-  #   depends_on:
-  #     rabbitmq:
-  #       condition: service_healthy
-  #   environment:
-  #     - RABBITMQ_HOST=rabbitmq
-  #     - OPERATION_TYPE=scatter_gather_detector
-  #     - INPUT_QUEUE=bridge_account_shards_4
-  #     - OUTPUT_QUEUE=scatter_gather_accounts_4
-  #     - EOF_CONTROL_QUEUE=eof_control_queue_4
+  scatter_gather_detector_1:
+    build:
+      context: ./src/
+      dockerfile: operations/scatter_gather/Dockerfile
+    container_name: scatter_gather_detector_1
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    environment:
+      - RABBITMQ_HOST=rabbitmq
+      - OPERATION_TYPE=scatter_gather_detector
+      - INPUT_QUEUE=bridge_account_shards_4
+      - OUTPUT_QUEUE=scatter_gather_accounts_4
+      - EOF_CONTROL_QUEUE=eof_control_queue_4
 
   eof_tracker:
     build:
