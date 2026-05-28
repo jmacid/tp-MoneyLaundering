@@ -4,6 +4,8 @@ RUN pip3 install pika
 
 WORKDIR /app
 
-COPY src/ ./src/
+COPY common ./common
+COPY workers/resolver .
 
-ENTRYPOINT ["python3", "src/workers/resolvers/bank_resolver.py"]
+
+ENTRYPOINT ["python3", "-m", "bank_resolver"]
