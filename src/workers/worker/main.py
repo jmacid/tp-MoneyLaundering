@@ -105,8 +105,10 @@ def main():
         else:
             emitted_count = 1 if result is not None else 0
 
+        client_id = transaction[0] if isinstance(transaction, list) else transaction.get("client_id")
+
         control_msg = json.dumps({
-            "client_id": transaction["client_id"],
+            "client_id": client_id,
             "node": node_name,
             "processed": 1,
             "emitted": emitted_count

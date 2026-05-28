@@ -64,6 +64,8 @@ class BankResolver:
         }
         
         self.output_queue.send(message_protocol.internal.serialize(gateway_payload))
+
+        self.output_queue.send(message_protocol.internal.serialize([client_id]))
         
         if client_id in self.global_max_by_client:
             del self.global_max_by_client[client_id]
