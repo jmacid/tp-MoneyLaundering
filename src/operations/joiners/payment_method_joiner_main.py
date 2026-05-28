@@ -4,8 +4,9 @@ import signal
 
 from common import middleware, message_protocol
 
+ID = int(os.environ.get("ID", "0"))
 MOM_HOST = os.environ.get("RABBITMQ_HOST", "rabbitmq")
-INPUT_QUEUE = os.environ.get("INPUT_QUEUE", "client_count_shards")
+INPUT_EXCHANGE = os.environ.get("INPUT_EXCHANGE", "client_count_shards_5")
 OUTPUT_QUEUE = os.environ.get("OUTPUT_QUEUE", "counted_transactions_5")
 
 AGGREGATION_AMOUNT = int(os.environ.get("AGGREGATION_AMOUNT", "1"))
@@ -13,8 +14,8 @@ AGGREGATION_AMOUNT = int(os.environ.get("AGGREGATION_AMOUNT", "1"))
 class PaymentMethodJoiner:
 
     def __init__(self):
-        self.input_queue = middleware.MessageMiddlewareQueueRabbitMQ(
-            MOM_HOST, INPUT_QUEUE
+        self.input_exchange = middleware.MessageMiddlewareExchangeRabbitMQ(
+            MOM_HOST, INPUT_EXCHANGE, [f"{INPUT_EXCHANGE}_{ID}"]
         )
         self.output_queue = middleware.MessageMiddlewareQueueRabbitMQ(
             MOM_HOST, OUTPUT_QUEUE
@@ -63,15 +64,15 @@ class PaymentMethodJoiner:
 
     def handle_sigterm(self, signum, frame):
         logging.info("SIGTERM recibido. Deteniendo consumo...")
-        self.input_queue.stop_consuming()
+        self.input_exchange.stop_consuming()
 
     def start(self):
         signal.signal(signal.SIGTERM, self.handle_sigterm)
         logging.info("Joiner iniciado y escuchando...")
         
-        self.input_queue.start_consuming(self.process_message)
+        self.input_exchange.start_consuming(self.process_message)
         
-        self.input_queue.close()
+        self.input_exchange.close()
         self.output_queue.close()
 
 
