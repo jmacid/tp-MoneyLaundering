@@ -80,7 +80,8 @@ def main():
         # logging.info("Processing transaction: %s", transaction)
 
         result = operation.process(transaction)
-        # logging.info(f"Processed transaction result: {result}")
+        if result is not None:
+            logging.info(f"Processed transaction result: {result}")
 
         if result is not None and dispatcher is not None:
             dispatcher.process([result])

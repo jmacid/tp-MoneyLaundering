@@ -2,14 +2,12 @@ import os
 import logging
 import signal
 import threading
-import json
 from collections import defaultdict
 from common import middleware, message_protocol
 
 MOM_HOST = os.getenv("RABBITMQ_HOST", "rabbitmq")
 INPUT_QUEUE = os.getenv("INPUT_QUEUE", "bridge_account_shards_4")
 OUTPUT_QUEUE = os.getenv("OUTPUT_QUEUE", "scatter_gather_accounts_4")
-EOF_CONTROL_QUEUE = os.getenv("EOF_CONTROL_QUEUE", "eof_control_queue_5")
 NODE_NAME = os.getenv("OPERATION_TYPE", "scatter_gather_detector")
 
 class ScatterGatherDetectorService:
@@ -17,9 +15,6 @@ class ScatterGatherDetectorService:
         self.input_queue = middleware.MessageMiddlewareQueueRabbitMQ(MOM_HOST, INPUT_QUEUE)
         self.output_queue = middleware.MessageMiddlewareQueueRabbitMQ(MOM_HOST, OUTPUT_QUEUE)
         
-        self.control_queue_consumer = middleware.MessageMiddlewareQueueRabbitMQ(MOM_HOST, EOF_CONTROL_QUEUE)
-        self.control_queue_publisher = middleware.MessageMiddlewareQueueRabbitMQ(MOM_HOST, EOF_CONTROL_QUEUE)
-
         self.account_flow = defaultdict(lambda: defaultdict(lambda: {"incoming": set(), "outgoing": set()}))
         self.lock = threading.Lock()
 
@@ -57,46 +52,30 @@ class ScatterGatherDetectorService:
             if client_id in self.account_flow:
                 del self.account_flow[client_id]
 
-        eof_msg = json.dumps({"client_id": client_id, "node": NODE_NAME, "processed": 1, "emitted": 1})
-        self.control_queue_publisher.send(eof_msg.encode('utf-8'))
+        # Propagamos el EOF al Gateway a través de la cola de salida final
+        self.output_queue.send(message_protocol.internal.serialize([client_id]))
 
     def process_data_message(self, message, ack, nack):
         try:
             fields = message_protocol.internal.deserialize(message)
+            logging.info(f"fields: {fields}")
             if isinstance(fields, dict) and "from_account" in fields and "to_account" in fields:
                 self._process_data(fields)
+            elif isinstance(fields, list) and len(fields) == 1:
+                self._process_eof(fields[0])
             ack()
         except Exception as e:
             logging.error(f"Error procesando datos Scatter-Gather: {e}")
             nack()
 
-    def process_control_message(self, message, ack, nack):
-        try:
-            msg = json.loads(message.decode('utf-8'))
-            if isinstance(msg, dict) and msg.get("node") == "destination_filter": 
-                client_id = msg.get("client_id")
-                self.input_queue.ch.connection.add_callback_threadsafe(lambda: self._process_eof(client_id))
-            ack()
-        except Exception as e:
-            nack()
-
     def handle_sigterm(self, signum, frame):
         self.input_queue.stop_consuming()
-        self.control_queue_consumer.ch.connection.add_callback_threadsafe(self.control_queue_consumer.stop_consuming)
 
     def start(self):
         signal.signal(signal.SIGTERM, self.handle_sigterm)
-        
-        self.thread_pcm = threading.Thread(target=self.control_queue_consumer.start_consuming, args=(self.process_control_message,))
-        self.thread_pcm.start()
-        
         self.input_queue.start_consuming(self.process_data_message)
-        
-        self.thread_pcm.join()
         self.input_queue.close()
         self.output_queue.close()
-        self.control_queue_consumer.close()
-        self.control_queue_publisher.close()
 
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
