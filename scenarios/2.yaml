@@ -8,7 +8,7 @@ services:
       rabbitmq:
         condition: service_healthy
     environment:
-    - INPUT_QUEUE=threshold_transactions_3
+    - INPUT_QUEUE=results_queue_2
     - MOM_HOST=rabbitmq
     - OUTPUT_QUEUE=transactions
     - PYTHONUNBUFFERED=1
@@ -78,21 +78,6 @@ services:
       - OUTPUTS=to_bank_dispatcher_queue_2
       - CURRENCY=US Dollar
       - EOF_CONTROL_QUEUE=eof_control_queue_2
-  # bank_resolver_1:
-  #   build:
-  #     context: ./src/
-  #     dockerfile: workers/resolver/Dockerfile
-  #   container_name: bank_resolver_1
-  #   depends_on:
-  #     rabbitmq:
-  #       condition: service_healthy
-  #   environment:
-  #     - PYTHONUNBUFFERED=1
-  #     - RABBITMQ_HOST=rabbitmq
-  #     - ID=0
-  #     - INPUT_EXCHANGE=max_bank_transactions
-  #     - OUTPUT_QUEUE=transactions
-  #     - AGGREGATORS_COUNT=1
   bank_dispatcher_1:
     build:
       context: ./src
@@ -127,6 +112,21 @@ services:
       - OUTPUT_EXCHANGE=max_bank_transactions
       - DISPATCHERS_AMOUNT=1
       - RESOLVERS_COUNT=1
+  bank_resolver_1:
+    build:
+      context: ./src/
+      dockerfile: workers/resolver/Dockerfile
+    container_name: bank_resolver_1
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    environment:
+      - PYTHONUNBUFFERED=1
+      - RABBITMQ_HOST=rabbitmq
+      - ID=0
+      - INPUT_EXCHANGE=max_bank_transactions
+      - OUTPUT_QUEUE=results_queue_2
+      - AGGREGATORS_COUNT=1
   eof_tracker:
     build:
       context: ./src/
@@ -138,5 +138,5 @@ services:
     environment:
       - RABBITMQ_HOST=rabbitmq
       - EOF_CONTROL_QUEUE=eof_control_queue_2
-      - FINAL_QUEUE=to_bank_dispatcher_queue
+      - FINAL_QUEUE=to_bank_dispatcher_queue_2
       - TOPOLOGY=gateway,projection_dispatcher,currency_filter

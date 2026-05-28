@@ -33,6 +33,7 @@ class LocalBankMaxAggregator:
         client_max = self.max_by_bank_by_client[client_id]
         
         if to_bank not in client_max or amount_paid > client_max[to_bank]["amount_paid"]:
+            logging.info(f"Nuevo maximo parcial para banco {to_bank}: {amount_paid}")
             client_max[to_bank] = {
                 "from_account": from_account,
                 "amount_paid": amount_paid
