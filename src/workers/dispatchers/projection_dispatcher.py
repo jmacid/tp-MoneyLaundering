@@ -6,7 +6,7 @@ Q_1 = ["client_id", "timestamp", "from_account","to_account","amount_paid", "rec
 Q_2 = ["from_account","to_bank","amount_paid"]
 Q_3 = ["timestamp","from_account","payment_format","amount_paid"]
 Q_4 = ["timestamp","from_account","to_account"]
-Q_5 = ["timestamp","payment_format","amount_paid","payment_currency"]
+Q_5 = ["client_id", "timestamp","payment_format","amount_paid","payment_currency", "amount_received", "receiving_currency"]
 
 
 class ProjectionDispatcher():

@@ -11,6 +11,8 @@ SERVER_PORT = int(os.environ["SERVER_PORT"])
 INPUT_FILE = os.environ["INPUT_FILE"]
 OUTPUT_FILE_MINOR_RESULT = os.environ["OUTPUT_FILE_MINOR_RESULT"]
 
+ROW_LIMIT = 1500 #None
+
 class Client:
     def __init__(self):
         self.closed = False
@@ -42,7 +44,7 @@ class Client:
             csv_reader = csv.reader(csvfile, delimiter=",", quotechar='"')
             _header = next(csv_reader)
 
-            for row in islice(csv_reader, 10000):
+            for row in islice(csv_reader, ROW_LIMIT):
                 message_protocol.external.send_msg(
                     self.server_socket,
                     message_protocol.external.MsgType.TRANSACTION_RECORD,

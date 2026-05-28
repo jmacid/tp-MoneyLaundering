@@ -77,10 +77,10 @@ def main():
     logging.info(f"Initialized successfully operation: {os.getenv("OPERATION_TYPE")}")
 
     def handle_message(transaction):
-        logging.info("Processing transaction: %s", transaction)
+        # logging.info("Processing transaction: %s", transaction)
 
         result = operation.process(transaction)
-        logging.info(f"Processed transaction result: {result}")
+        # logging.info(f"Processed transaction result: {result}")
 
         if result is not None and dispatcher is not None:
             dispatcher.process([result])
