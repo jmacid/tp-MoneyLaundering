@@ -61,6 +61,7 @@ class CurrencyNormalizer(OperationStrategy):
                 raise ValueError(f"Fallo al obtener exchange rate para {currency_tag} -> {self.target_currency} en {rate_date}: {e}")
 
         exchange_rate = self.exchange_rates[key]
+        # logging.info(f"Conversion: {amount} * {exchange_rate.rate} = {amount * exchange_rate.rate}")
         return amount * exchange_rate.rate
 
     def process(self, transaction: dict[str, Any]) -> dict[str, Any] | None:

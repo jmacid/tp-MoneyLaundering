@@ -192,6 +192,58 @@ services:
       - OUTPUT_MIDDLEWARE_TYPE=queue
       - OUTPUTS=minor_transactions_candidates
       - TARGET_CURRENCY=USD
+  amount_filter_1:
+    build:
+      context: ./src/
+      dockerfile: workers/worker/Dockerfile
+    container_name: amount_filter_1
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    environment:
+      - RABBITMQ_HOST=rabbitmq
+      - OPERATION_TYPE=amount_filter
+      - INPUT_MIDDLEWARE_TYPE=queue
+      - INPUT_QUEUE=minor_transactions_candidates
+      - OUTPUT_MIDDLEWARE_TYPE=queue
+      - OUTPUTS=minor_transactions_5
+      - MINIMUM_AMOUNT=55
+      - EOF_CONTROL_QUEUE=eof_control_queue
+      - AMOUNT_FIELD=normalized_amount_received
+  # amount_filter_2:
+  #   build:
+  #     context: ./src/
+  #     dockerfile: workers/worker/Dockerfile
+  #   container_name: amount_filter_2
+  #   depends_on:
+  #     rabbitmq:
+  #       condition: service_healthy
+  #   environment:
+  #     - RABBITMQ_HOST=rabbitmq
+  #     - OPERATION_TYPE=amount_filter
+  #     - INPUT_MIDDLEWARE_TYPE=queue
+  #     - INPUT_QUEUE=range_transactions
+  #     - OUTPUT_MIDDLEWARE_TYPE=queue
+  #     - OUTPUTS=minor_transactions
+  #     - MINIMUM_AMOUNT=50
+  #     - EOF_CONTROL_QUEUE=eof_control_queue
+  # amount_filter_3:
+  #   build:
+  #     context: ./src/
+  #     dockerfile: workers/worker/Dockerfile
+  #   container_name: amount_filter_3
+  #   depends_on:
+  #     rabbitmq:
+  #       condition: service_healthy
+  #   environment:
+  #     - RABBITMQ_HOST=rabbitmq
+  #     - OPERATION_TYPE=amount_filter
+  #     - INPUT_MIDDLEWARE_TYPE=queue
+  #     - INPUT_QUEUE=range_transactions
+  #     - OUTPUT_MIDDLEWARE_TYPE=queue
+  #     - OUTPUTS=minor_transactions
+  #     - MINIMUM_AMOUNT=50
+  #     - EOF_CONTROL_QUEUE=eof_control_queue
   # currency_filter_1:
   #   build:
   #     context: ./src/
@@ -242,57 +294,6 @@ services:
   #     - OUTPUT_MIDDLEWARE_TYPE=queue
   #     - OUTPUTS=USD_transactions
   #     - CURRENCY=US Dollar
-  #     - EOF_CONTROL_QUEUE=eof_control_queue
-  # amount_filter_1:
-  #   build:
-  #     context: ./src/
-  #     dockerfile: workers/worker/Dockerfile
-  #   container_name: amount_filter_1
-  #   depends_on:
-  #     rabbitmq:
-  #       condition: service_healthy
-  #   environment:
-  #     - RABBITMQ_HOST=rabbitmq
-  #     - OPERATION_TYPE=amount_filter
-  #     - INPUT_MIDDLEWARE_TYPE=queue
-  #     - INPUT_QUEUE=range_transactions
-  #     - OUTPUT_MIDDLEWARE_TYPE=queue
-  #     - OUTPUTS=minor_transactions
-  #     - MINIMUM_AMOUNT=50
-  #     - EOF_CONTROL_QUEUE=eof_control_queue
-  # amount_filter_2:
-  #   build:
-  #     context: ./src/
-  #     dockerfile: workers/worker/Dockerfile
-  #   container_name: amount_filter_2
-  #   depends_on:
-  #     rabbitmq:
-  #       condition: service_healthy
-  #   environment:
-  #     - RABBITMQ_HOST=rabbitmq
-  #     - OPERATION_TYPE=amount_filter
-  #     - INPUT_MIDDLEWARE_TYPE=queue
-  #     - INPUT_QUEUE=range_transactions
-  #     - OUTPUT_MIDDLEWARE_TYPE=queue
-  #     - OUTPUTS=minor_transactions
-  #     - MINIMUM_AMOUNT=50
-  #     - EOF_CONTROL_QUEUE=eof_control_queue
-  # amount_filter_3:
-  #   build:
-  #     context: ./src/
-  #     dockerfile: workers/worker/Dockerfile
-  #   container_name: amount_filter_3
-  #   depends_on:
-  #     rabbitmq:
-  #       condition: service_healthy
-  #   environment:
-  #     - RABBITMQ_HOST=rabbitmq
-  #     - OPERATION_TYPE=amount_filter
-  #     - INPUT_MIDDLEWARE_TYPE=queue
-  #     - INPUT_QUEUE=range_transactions
-  #     - OUTPUT_MIDDLEWARE_TYPE=queue
-  #     - OUTPUTS=minor_transactions
-  #     - MINIMUM_AMOUNT=50
   #     - EOF_CONTROL_QUEUE=eof_control_queue
   # eof_tracker:
   #   build:
