@@ -78,29 +78,29 @@ services:
       - OUTPUTS=USD_transactions_3,USD_transactions_avg_3
       - CURRENCY=US Dollar
       - EOF_CONTROL_QUEUE=eof_control_queue_3
-  date_range_filter_1:
+  # date_range_filter_1:
+  #   build:
+  #     context: ./src/
+  #     dockerfile: workers/worker/Dockerfile
+  #   container_name: date_range_filter_1
+  #   depends_on:
+  #     rabbitmq:
+  #       condition: service_healthy
+  #   environment:
+  #     - RABBITMQ_HOST=rabbitmq
+  #     - OPERATION_TYPE=date_range_filter
+  #     - INPUT_MIDDLEWARE_TYPE=queue
+  #     - INPUT_QUEUE=USD_transactions_3
+  #     - OUTPUT_MIDDLEWARE_TYPE=queue
+  #     - OUTPUTS=threshold_evaluation_3
+  #     - START_DATE=2022-09-01T00:15:00
+  #     - END_DATE=2022-09-01T00:30:00
+  #     - EOF_CONTROL_QUEUE=eof_control_queue_3
+  avg_date_range_filter_1:
     build:
       context: ./src/
       dockerfile: workers/worker/Dockerfile
-    container_name: date_range_filter_1
-    depends_on:
-      rabbitmq:
-        condition: service_healthy
-    environment:
-      - RABBITMQ_HOST=rabbitmq
-      - OPERATION_TYPE=date_range_filter
-      - INPUT_MIDDLEWARE_TYPE=queue
-      - INPUT_QUEUE=USD_transactions_3
-      - OUTPUT_MIDDLEWARE_TYPE=queue
-      - OUTPUTS=threshold_evaluation_3
-      - START_DATE=2022-09-01T00:15:00
-      - END_DATE=2022-09-01T00:30:00
-      - EOF_CONTROL_QUEUE=eof_control_queue_3
-  date_range_filter_avg_1:
-    build:
-      context: ./src/
-      dockerfile: workers/worker/Dockerfile
-    container_name: date_range_filter_avg_1
+    container_name: avg_date_range_filter_1
     depends_on:
       rabbitmq:
         condition: service_healthy
@@ -170,5 +170,6 @@ services:
     environment:
       - RABBITMQ_HOST=rabbitmq
       - EOF_CONTROL_QUEUE=eof_control_queue_3
-      - FINAL_QUEUE=calculated_averages_3
-      - TOPOLOGY=gateway,projection_dispatcher,currency_filter,date_range_filter,average_worker
+      - FINAL_QUEUE=avg_transactions_3
+      - TOPOLOGY=gateway,projection_dispatcher,currency_filter,avg_date_range_filter
+      # - TOPOLOGY=gateway,projection_dispatcher,currency_filter,avg_date_range_filter
