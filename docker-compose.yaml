@@ -342,6 +342,20 @@ services:
       - INPUT_EXCHANGE=local_count_transactions_5
       - OUTPUT_QUEUE=client_count_shards_5
       - COUNTER_AMOUNT=1
+  payment_method_joiner_1:
+    build:
+      context: ./src
+      dockerfile: operations/joiners/Dockerfile
+    container_name: payment_method_joiner_1
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    environment:
+      - PYTHONUNBUFFERED=1
+      - RABBITMQ_HOST=rabbitmq
+      - INPUT_QUEUE=client_count_shards_5
+      - OUTPUT_QUEUE=counted_transactions_5
+      - AGGREGATION_AMOUNT=1
   eof_tracker:
     build:
       context: ./src/
