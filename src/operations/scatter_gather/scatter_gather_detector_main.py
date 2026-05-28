@@ -47,12 +47,12 @@ class ScatterGatherDetectorService:
                     "client_id": client_id,
                     "scatter_gather_paths": scatter_gather_paths
                 }
+                logging.info(f"Scatter-Gather results para cliente {client_id[:8]}: {result}")
                 self.output_queue.send(message_protocol.internal.serialize(result))
 
             if client_id in self.account_flow:
                 del self.account_flow[client_id]
 
-        # Propagamos el EOF al Gateway a través de la cola de salida final
         self.output_queue.send(message_protocol.internal.serialize([client_id]))
 
     def process_data_message(self, message, ack, nack):

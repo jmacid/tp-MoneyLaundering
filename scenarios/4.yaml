@@ -23,8 +23,8 @@ services:
     depends_on:
       - gateway
     environment:
-    # - INPUT_FILE=/datasets/HI-Small_Trans.csv
-    - INPUT_FILE=/datasets/sc.csv
+    - INPUT_FILE=/datasets/HI-Small_Trans.csv
+    # - INPUT_FILE=/datasets/sc.csv
     - SERVER_HOST=gateway
     - SERVER_PORT=5678
     - OUTPUT_FILE_MINOR_RESULT=/output/client_1_minor_result.csv
