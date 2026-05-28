@@ -244,6 +244,21 @@ services:
   #     - OUTPUTS=minor_transactions
   #     - MINIMUM_AMOUNT=50
   #     - EOF_CONTROL_QUEUE=eof_control_queue
+  payment_method_counter_1:
+    build:
+      context: ./src/
+      dockerfile: workers/worker/Dockerfile
+    container_name: payment_method_counter_1
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    environment:
+      - RABBITMQ_HOST=rabbitmq
+      - OPERATION_TYPE=payment_method_counter
+      - INPUT_MIDDLEWARE_TYPE=queue
+      - INPUT_QUEUE=minor_transactions_5
+      - OUTPUT_MIDDLEWARE_TYPE=queue
+      - OUTPUTS=local_count_transactions_5
   # currency_filter_1:
   #   build:
   #     context: ./src/

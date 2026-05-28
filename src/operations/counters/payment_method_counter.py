@@ -9,13 +9,13 @@ class PaymentMethodCounter(OperationStrategy):
     def __init__(self):
 
         self.count: dict[str, dict[str, int]] = defaultdict(lambda: defaultdict(int))
-        self.required_fields = {"payment_format"} #"client_id", only for demo
+        self.required_fields = {"client_id", "payment_format"}
 
     def process(self, transaction: dict[str, Any]) -> dict[str, Any] | None:
 
         TransactionValidator.validate_required_fields(transaction, self.required_fields)
 
-        client_id = "Hardcoded for demo" # transaction["client_id"] for DEMO
+        client_id = transaction["client_id"]
         payment_method = transaction["payment_format"]
 
         logging.info(f"Processing Client={client_id} Payment={payment_method}")
@@ -28,4 +28,4 @@ class PaymentMethodCounter(OperationStrategy):
 
         self.count[client_id][payment_method] += 1
 
-        logging.info(f"Client={client_id} Payment={payment_method} Count {self.count[client_id][payment_method]}")        
+        logging.info(f"Client={client_id} Payment={payment_method} Count {self.count[client_id][payment_method]}")
