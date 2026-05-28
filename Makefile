@@ -19,11 +19,11 @@ logs:
 
 switch:
 	@echo Escenarios de prueba:
-	@echo "1) Regla 1 - Transacciones menores a 50 USD"
-	@echo "2) Regla 2"
-	@echo "3) Regla 3"
-	@echo "4) Regla 4"
-	@echo "5) Regla 5"
+	@echo "1) Regla 1 - Detección de transacciones menores a 50 USD"
+	@echo "2) Regla 2 - Detección de máxima transacción por banco"
+	@echo "3) Regla 3 - Detección de transacción menores al promedio cálculado"
+	@echo "4) Regla 4 - Detección de patrón Scatter-Gather"
+	@echo "5) Regla 5 - Cantidad de transacciones por vía de pago"
 	@echo "6) Todas las reglas"
 	@read -p "Selecciona uno [1-6]: " option;	\
 	cp ./scenarios/$${option}.yaml docker-compose.yaml

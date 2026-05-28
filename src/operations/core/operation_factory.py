@@ -6,7 +6,7 @@ from operations.filters.payment_method_filter import PaymentMethodFilter
 from operations.normalizers.currency_normalizer import CurrencyNormalizer
 from operations.filters.destination_filter import DestinationFilter
 from operations.scatter_gather.scatter_gather_detector import ScatterGatherDetector
-
+from operations.average.average_calculator import AverageCalculator
 class OperationFactory:
 
     @staticmethod
@@ -22,6 +22,7 @@ class OperationFactory:
             #"projector_dispatcher": PaymentMethodFilter,
             "destination_filter": DestinationFilter,
             "scatter_gather_detector": ScatterGatherDetector,
+            "average_calculator": AverageCalculator
         }
 
         operation_class = operations.get(operation_type)
