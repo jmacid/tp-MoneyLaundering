@@ -5,6 +5,8 @@ from collections import defaultdict
 from common import middleware
 
 logging.basicConfig(level=logging.INFO)
+EOF_CONTROL_QUEUE = os.getenv("EOF_CONTROL_QUEUE", "eof_control_queue")
+FINAL_QUEUE = os.getenv("EOF_CONTROL_QUEUE", "minor_transactions")
 
 def get_topology():
     topology_env = os.environ["TOPOLOGY"]
@@ -20,9 +22,9 @@ topology = get_topology()
 
 
 def main():
-    control_queue = middleware.MessageMiddlewareQueueRabbitMQ("rabbitmq", "eof_control_queue")
+    control_queue = middleware.MessageMiddlewareQueueRabbitMQ("rabbitmq", EOF_CONTROL_QUEUE)
     
-    final_gateway_queue = middleware.MessageMiddlewareQueueRabbitMQ("rabbitmq", "minor_transactions")
+    final_gateway_queue = middleware.MessageMiddlewareQueueRabbitMQ("rabbitmq", FINAL_QUEUE)
     
     state = defaultdict(lambda: defaultdict(lambda: {"processed": 0, "emitted": 0}))
 
