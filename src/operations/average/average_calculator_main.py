@@ -41,6 +41,7 @@ class PaymentMethodCounter:
     def _process_data(self, transaction):
         client_id = transaction["client_id"]
         payment_format = transaction["payment_format"]
+        amount_paid = float(transaction["amount_paid"])
 
         logging.info(f"[_process_data]: Contando {payment_format} para cliente {client_id[:8]}")
         
@@ -49,22 +50,26 @@ class PaymentMethodCounter:
                 self.count_by_client_and_payment[client_id] = {}
 
             client_data = self.count_by_client_and_payment[client_id]
-            client_data[payment_format] = client_data.get(payment_format, 0) + 1
+            if payment_format not in client_data:
+                client_data[payment_format] = {"count": 0, "sum": 0.0}
+
+            client_data[payment_format]["count"] += 1
+            client_data[payment_format]["sum"] += amount_paid
 
     def _process_eof(self, client_id):
         logging.info(f"Recibido EOF. Vaciando resultados parciales para el cliente {client_id[:8]}")
 
         with self.lock:
             if client_id in self.count_by_client_and_payment:
-                for payment_format, count, sum in self.count_by_client_and_payment[client_id].items():
+                for payment_format, data in self.count_by_client_and_payment[client_id].items():
                     hash_val = int(hashlib.md5(payment_format.encode('utf-8')).hexdigest(), 16)
                     aggregator_index = hash_val % AGGREGATION_AMOUNT
 
                     result = {
                         "client_id": client_id,
                         "payment_format": payment_format,
-                        "sum": sum,
-                        "count": count
+                        "sum": data["sum"],
+                        "count": float(data["count"])
                     }
 
                     self.data_output_exchanges[aggregator_index].send(
