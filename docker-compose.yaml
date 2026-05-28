@@ -170,5 +170,5 @@ services:
     environment:
       - RABBITMQ_HOST=rabbitmq
       - EOF_CONTROL_QUEUE=eof_control_queue_3
-      - FINAL_QUEUE=calculated_averages_3
+      - FINAL_QUEUE=avg_transactions_3
       - TOPOLOGY=gateway,projection_dispatcher,currency_filter,date_range_filter,average_worker
