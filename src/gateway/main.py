@@ -7,6 +7,7 @@ import message_handler
 from common import middleware, message_protocol
 import uuid
 import json
+import csv 
 
 SERVER_HOST = os.environ["SERVER_HOST"]
 SERVER_PORT = int(os.environ["SERVER_PORT"])
@@ -16,10 +17,48 @@ INPUT_QUEUE = os.environ["INPUT_QUEUE"]
 OUTPUT_QUEUE = os.environ["OUTPUT_QUEUE"]
 EOF_CONTROL_QUEUE = os.environ["EOF_CONTROL_QUEUE"]
 
+BANKS_CSV_PATH = os.getenv("BANKS_CSV_PATH", "banks.csv")
+RESOLVERS_COUNT = int(os.getenv("RESOLVERS_COUNT", "1"))
+RESOLVER_EXCHANGE = os.getenv("RESOLVER_EXCHANGE", "max_bank_transactions")
+
+
+def load_bank_mapping(file_path):
+    """Lee el archivo CSV y retorna un diccionario id_bank -> name_bank"""
+    mapping = {}
+    if not os.path.exists(file_path):
+        logging.warning(f"File not founded in {file_path}. Continuing with empty bank mapping.")
+        return mapping
+    try:
+        with open(file_path, mode='r', encoding='utf-8') as f:
+            reader = csv.reader(f)
+            next(reader, None) 
+            for row in reader:
+                if len(row) >= 2:
+                    mapping[row[0].strip()] = row[1].strip()
+    except Exception as e:
+        logging.error(f"Error reading the banks CSV file: {e}")
+    return mapping
+
 
 def handle_client_request(client_socket, message_handler):
     output_queue = middleware.MessageMiddlewareQueueRabbitMQ(MOM_HOST, OUTPUT_QUEUE)
     control_queue = middleware.MessageMiddlewareQueueRabbitMQ(MOM_HOST, EOF_CONTROL_QUEUE)
+
+    try:
+        bank_map = load_bank_mapping(BANKS_CSV_PATH)
+        if bank_map:
+            logging.info(f"Sending catalog of {len(bank_map)} banks to the Resolver replicas")
+            mapping_payload = {"bank_mapping": bank_map}
+            serialized_map = message_protocol.internal.serialize(mapping_payload)
+            
+            for i in range(RESOLVERS_COUNT):
+                resolver_exchange = middleware.MessageMiddlewareExchangeRabbitMQ(
+                    MOM_HOST, RESOLVER_EXCHANGE, [f"{RESOLVER_EXCHANGE}{i}"]
+                )
+                resolver_exchange.send(serialized_map)
+                resolver_exchange.close()
+    except Exception as e:
+        logging.error(f"Error distributing the banks catalog: {e}")
 
     transactions_sent = 0
 
@@ -75,7 +114,7 @@ def handle_client_response(client_list):
                     if client_data[0] == target_client_id:
                         target_socket = client_data[2]
                         message_protocol.external.send_msg(target_socket, message_protocol.external.MsgType.END_OF_RECODS)
-                        client_list.pop(idx) # Liberamos recursos del cliente
+                        client_list.pop(idx) 
                         break
                 ack()
                 return
@@ -108,7 +147,7 @@ def handle_client_response(client_list):
 
 def handle_sigterm(server_socket, client_list, sigterm_received):
     server_socket.shutdown(socket.SHUT_RDWR)
-    for [_, client_socket] in client_list:
+    for [_, __, client_socket] in client_list:
         client_socket.shutdown(socket.SHUT_RDWR)
     sigterm_received.value = 1
 
