@@ -55,6 +55,7 @@ class ThresholdEvaluator:
                     if client_id not in self.transactions_by_client:
                         self.transactions_by_client[client_id] = []
                     self.transactions_by_client[client_id].append(fields)
+                    logging.info(f"Guardando TX en RAM. Cliente: {client_id[:8]} | Esperando promedio...")
             elif isinstance(fields, list) and len(fields) == 1:
                 client_id = fields[0]
                 with self.lock:
@@ -73,6 +74,7 @@ class ThresholdEvaluator:
                 client_id = fields["client_id"]
                 with self.lock:
                     self.averages_by_client[client_id] = fields["counts"]
+                    logging.info(f"¡Promedio recibido del Joiner para {client_id[:8]}! Listo para cruzar datos.")
                     self._evaluate(client_id)
             ack()
         except Exception as e:
