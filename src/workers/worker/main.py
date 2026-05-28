@@ -81,7 +81,7 @@ def main():
         EOF_CONTROL_QUEUE
     )
 
-    node_name = os.getenv("OPERATION_TYPE")
+    node_name = os.getenv("NODE_NAME", os.getenv("OPERATION_TYPE"))
 
     logging.info(f"Initialized successfully operation: {os.getenv("OPERATION_TYPE")}")
 
