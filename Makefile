@@ -24,7 +24,7 @@ switch:
 	@echo "3) Regla 3 - Detección de transacción menores al promedio cálculado"
 	@echo "4) Regla 4 - Detección de patrón Scatter-Gather"
 	@echo "5) Regla 5 - Cantidad de transacciones por vía de pago"
-	@echo "6) Todas las reglas"
-	@read -p "Selecciona uno [1-6]: " option;	\
+# 	@echo "6) Todas las reglas"
+	@read -p "Selecciona uno [1-5]: " option;	\
 	cp ./scenarios/$${option}.yaml docker-compose.yaml
 .PHONY: switch

@@ -82,7 +82,7 @@ class Client:
                 break
 
     def _save_minor_result(self, msg_payload):
-        logging.info(f"SUSPICIOUS MINOR TRANSACTION DETECTED: {msg_payload}")
+        logging.info(f"result: {msg_payload}")
         file_exists = os.path.isfile(OUTPUT_FILE_MINOR_RESULT)
 
         if self.output_file_minor_result is None:
