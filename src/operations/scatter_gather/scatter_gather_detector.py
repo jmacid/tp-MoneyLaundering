@@ -7,7 +7,7 @@ class ScatterGatherDetector(OperationStrategy, TransactionValidator):
 
     def __init__(self) -> None:
 
-        self.required_fields = {"from_account", "to_account"} #"client_id", only for demo
+        self.required_fields = {"client_id", "from_account", "to_account"}
         self.account_flow: dict[str, dict[str, set[str]]] = defaultdict(
             lambda: {
                 "incoming": set(),

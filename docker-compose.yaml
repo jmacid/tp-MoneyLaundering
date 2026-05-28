@@ -96,6 +96,39 @@ services:
       - START_DATE=2022-09-01T00:15:00
       - END_DATE=2022-09-01T00:30:00
       - EOF_CONTROL_QUEUE=eof_control_queue_5
+  destination_filter_1:
+    build:
+      context: ./src/
+      dockerfile: workers/worker/Dockerfile
+    container_name: destination_filter_1
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    environment:
+      - RABBITMQ_HOST=rabbitmq
+      - OPERATION_TYPE=destination_filter
+      - INPUT_MIDDLEWARE_TYPE=queue
+      - INPUT_QUEUE=account_shards_4
+      - OUTPUT_MIDDLEWARE_TYPE=queue
+      - OUTPUTS=bridge_account_shards_4
+      - DESTINATION_ACC_REQUIRED=3
+      - EOF_CONTROL_QUEUE=eof_control_queue_5
+
+  scatter_gather_detector_1:
+    build:
+      context: ./src/
+      dockerfile: operations/scatter_gather/Dockerfile
+    container_name: scatter_gather_detector_1
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    environment:
+      - RABBITMQ_HOST=rabbitmq
+      - OPERATION_TYPE=scatter_gather_detector
+      - INPUT_QUEUE=bridge_account_shards_4
+      - OUTPUT_QUEUE=scatter_gather_accounts_4
+      - EOF_CONTROL_QUEUE=eof_control_queue_5
+
   eof_tracker:
     build:
       context: ./src/
@@ -108,4 +141,4 @@ services:
       - RABBITMQ_HOST=rabbitmq
       - EOF_CONTROL_QUEUE=eof_control_queue_5
       - FINAL_QUEUE=minor_transactions_5
-      - TOPOLOGY=gateway,projection_dispatcher,currency_filter,date_range_filter
+      - TOPOLOGY=gateway,projection_dispatcher,currency_filter,date_range_filter,destination_filter,scatter_gather_detector

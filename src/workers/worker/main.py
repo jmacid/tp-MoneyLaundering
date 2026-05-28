@@ -10,7 +10,7 @@ import json
 from common import middleware
 
 ALLOWED_OPERATIONS = ["currency_filter","amount_filter","date_range_filter","payment_method_filter",
-                      "payment_method_counter","currency_normalizer", "projection_dispatcher"]
+                      "payment_method_counter","currency_normalizer", "projection_dispatcher", "destination_filter", "scatter_gather_detector"]
 
 logging.basicConfig(
     level=logging.INFO,

@@ -19,13 +19,13 @@ class DestinationFilter(OperationStrategy):
         self.destination_required_acc = required_accounts or Decimal(required_accounts_raw)
 
         self.count: dict[str, dict[str, set[str]]] = defaultdict(lambda: defaultdict(set))
-        self.required_fields = {"from_account", "to_account"} #"client_id", only for demo
+        self.required_fields = {"from_account", "to_account"}
 
     def process(self, transaction: dict[str, Any]) -> dict[str, Any] | None:
 
         TransactionValidator.validate_required_fields(transaction, self.required_fields)
 
-        client_id = "Hardcoded for demo" # transaction["client_id"] for DEMO
+        client_id = transaction.get("client_id", "Hardcoded for demo")
         from_account = transaction["from_account"]
         to_account = transaction["to_account"]
 
@@ -33,9 +33,10 @@ class DestinationFilter(OperationStrategy):
 
         self.count[client_id][from_account].add(to_account)
 
-        return self._validate_condition(client_id, from_account, to_account)
+        return self._validate_condition(client_id, from_account, transaction)
     
-    def _validate_condition(self, client_id: str, from_account: str) -> dict[str, Any] | None:
+    def _validate_condition(self, client_id: str, from_account: str, transaction: dict[str, Any]) -> dict[str, Any] | None:
         if (len(self.count[client_id][from_account])) >= self.destination_required_acc:
-            return {"from_account": from_account}
+            return transaction
+
         return None

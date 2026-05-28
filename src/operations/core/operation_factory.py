@@ -4,6 +4,8 @@ from operations.filters.currency_fIlter import CurrencyFilter
 from operations.filters.date_range_filter import DateRangeFilter
 from operations.filters.payment_method_filter import PaymentMethodFilter
 from operations.normalizers.currency_normalizer import CurrencyNormalizer
+from operations.filters.destination_filter import DestinationFilter
+from operations.scatter_gather.scatter_gather_detector import ScatterGatherDetector
 
 class OperationFactory:
 
@@ -18,6 +20,8 @@ class OperationFactory:
             "payment_method_counter": PaymentMethodCounter,
             "currency_normalizer": CurrencyNormalizer,
             #"projector_dispatcher": PaymentMethodFilter,
+            "destination_filter": DestinationFilter,
+            "scatter_gather_detector": ScatterGatherDetector,
         }
 
         operation_class = operations.get(operation_type)
