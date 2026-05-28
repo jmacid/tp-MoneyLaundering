@@ -132,7 +132,7 @@ services:
   average_aggregator_0:
     build:
       context: ./src
-      dockerfile: operations/aggregators/Dockerfile
+      dockerfile: operations/aggregators/average/Dockerfile
     container_name: average_aggregator_0
     depends_on:
       rabbitmq:
@@ -148,7 +148,7 @@ services:
   average_joiner_0:
     build:
       context: ./src
-      dockerfile: operations/joiners/Dockerfile
+      dockerfile: operations/joiners/average/Dockerfile
     container_name: average_joiner_0
     depends_on:
       rabbitmq:

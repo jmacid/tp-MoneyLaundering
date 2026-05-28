@@ -75,6 +75,7 @@ class ThresholdEvaluator:
                 with self.lock:
                     self.averages_by_client[client_id] = fields["counts"]
                     logging.info(f"¡Promedio recibido del Joiner para {client_id[:8]}! Listo para cruzar datos.")
+                    self.tx_eof_received.add(client_id)
                     self._evaluate(client_id)
             ack()
         except Exception as e:
