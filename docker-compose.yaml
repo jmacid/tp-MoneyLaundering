@@ -1,24 +1,71 @@
 services:
+  gateway:
+    build:
+      context: ./src/
+      dockerfile: gateway/Dockerfile
+    container_name: gateway
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    environment:
+    - INPUT_QUEUE=counted_transactions_5
+    - MOM_HOST=rabbitmq
+    - OUTPUT_QUEUE=transactions
+    - PYTHONUNBUFFERED=1
+    - SERVER_HOST=gateway
+    - SERVER_PORT=5678
+    - EOF_CONTROL_QUEUE=eof_control_queue_5
+  client_1:
+    build:
+      context: ./src/
+      dockerfile: client/Dockerfile
+    container_name: client_1
+    depends_on:
+      - gateway
+    environment:
+    - INPUT_FILE=/datasets/HI-Small_Trans.csv
+    - SERVER_HOST=gateway
+    - SERVER_PORT=5678
+    - OUTPUT_FILE_MINOR_RESULT=/output/client_1_minor_result.csv
+    volumes:
+    - ./datasets:/datasets
+    - ./output:/output
+  # client_2:
+  #   build:
+  #     context: ./src/
+  #     dockerfile: client/Dockerfile
+  #   container_name: client_2
+  #   depends_on:
+  #     - gateway
+  #   environment:
+  #   - INPUT_FILE=/datasets/HI-Small_Trans.csv
+  #   - SERVER_HOST=gateway
+  #   - SERVER_PORT=5678
+  #   - OUTPUT_FILE_MINOR_RESULT=/output/client_2_minor_result.csv
+  #   volumes:
+  #   - ./datasets:/datasets
+  #   - ./output:/output
   rabbitmq:
-    image: rabbitmq:3-management
+    build:
+      context: ./src/rabbitmq
+      dockerfile: Dockerfile
     container_name: rabbitmq
-    ports:
-      - "5672:5672"
-      - "15672:15672"
+    environment:
+    - RABBITMQ_LOG_LEVELS=error
     healthcheck:
-      test: rabbitmq-diagnostics check_port_connectivity
       interval: 5s
-      timeout: 3s
       retries: 10
       start_period: 50s
-    environment:
-      - RABBITMQ_LOG_LEVELS=error
-
-  projection_dispatcher:
+      test: rabbitmq-diagnostics check_port_connectivity
+      timeout: 3s
+    ports:
+    - 5672:5672
+    - 15672:15672
+  projection_dispatcher_1:
     build:
       context: ./src/
       dockerfile: workers/worker/Dockerfile
-    container_name: projection_dispatcher
+    container_name: projection_dispatcher_1
     depends_on:
       rabbitmq:
         condition: service_healthy
@@ -28,12 +75,42 @@ services:
       - INPUT_MIDDLEWARE_TYPE=queue
       - INPUT_QUEUE=transactions
       - OUTPUTS=minor_query,max_query,avg_query,scatter_gather_query,count_query
-
-  date_range_filter:
+      - EOF_CONTROL_QUEUE=eof_control_queue_5
+# projection_dispatcher_2:
+#   build:
+#     context: ./src/
+#     dockerfile: workers/worker/Dockerfile
+#   container_name: projection_dispatcher_2
+#   depends_on:
+#     rabbitmq:
+#       condition: service_healthy
+#   environment:
+#     - RABBITMQ_HOST=rabbitmq
+#     - OPERATION_TYPE=projection_dispatcher
+#     - INPUT_MIDDLEWARE_TYPE=queue
+#     - INPUT_QUEUE=transactions
+#     - OUTPUTS=minor_query,max_query,avg_query,scatter_gather_query,count_query
+#     - EOF_CONTROL_QUEUE=eof_control_queue_5
+# projection_dispatcher_3:
+#   build:
+#     context: ./src/
+#     dockerfile: workers/worker/Dockerfile
+#   container_name: projection_dispatcher3
+#   depends_on:
+#     rabbitmq:
+#       condition: service_healthy
+#   environment:
+#     - RABBITMQ_HOST=rabbitmq
+#     - OPERATION_TYPE=projection_dispatcher
+#     - INPUT_MIDDLEWARE_TYPE=queue
+#     - INPUT_QUEUE=transactions
+#     - OUTPUTS=minor_query,max_query,avg_query,scatter_gather_query,count_query
+#     - EOF_CONTROL_QUEUE=eof_control_queue_5
+  date_range_filter_1:
     build:
       context: ./src/
       dockerfile: workers/worker/Dockerfile
-    container_name: date_range_filter
+    container_name: date_range_filter_1
     depends_on:
       rabbitmq:
         condition: service_healthy
@@ -43,15 +120,51 @@ services:
       - INPUT_MIDDLEWARE_TYPE=queue
       - INPUT_QUEUE=count_query
       - OUTPUT_MIDDLEWARE_TYPE=queue
-      - OUTPUTS=range_transactions
-      - START_DATE=2026-01-01T00:00:00
-      - END_DATE=2026-12-31T23:59:59
-
-  payment_method_filter:
+      - OUTPUTS=range_transactions_5
+      - START_DATE=2022-09-01T00:15:00
+      - END_DATE=2022-09-01T00:30:00
+      - EOF_CONTROL_QUEUE=eof_control_queue_5
+  # date_range_filter_2:
+  #   build:
+  #     context: ./src/
+  #     dockerfile: workers/worker/Dockerfile
+  #   container_name: date_range_filter_2
+  #   depends_on:
+  #     rabbitmq:
+  #       condition: service_healthy
+  #   environment:
+  #     - RABBITMQ_HOST=rabbitmq
+  #     - OPERATION_TYPE=date_range_filter
+  #     - INPUT_MIDDLEWARE_TYPE=queue
+  #     - INPUT_QUEUE=USD_transactions
+  #     - OUTPUT_MIDDLEWARE_TYPE=queue
+  #     - OUTPUTS=range_transactions
+  #     - START_DATE=2022-09-01T00:15:00
+  #     - END_DATE=2022-09-01T00:30:00
+  #     - EOF_CONTROL_QUEUE=eof_control_queue_5
+  # date_range_filter_3:
+  #   build:
+  #     context: ./src/
+  #     dockerfile: workers/worker/Dockerfile
+  #   container_name: date_range_filter_3
+  #   depends_on:
+  #     rabbitmq:
+  #       condition: service_healthy
+  #   environment:
+  #     - RABBITMQ_HOST=rabbitmq
+  #     - OPERATION_TYPE=date_range_filter
+  #     - INPUT_MIDDLEWARE_TYPE=queue
+  #     - INPUT_QUEUE=USD_transactions
+  #     - OUTPUT_MIDDLEWARE_TYPE=queue
+  #     - OUTPUTS=range_transactions
+  #     - START_DATE=2022-09-01T00:15:00
+  #     - END_DATE=2022-09-01T00:30:00
+  #     - EOF_CONTROL_QUEUE=eof_control_queue_5
+  payment_method_filter_1:
     build:
       context: ./src/
       dockerfile: workers/worker/Dockerfile
-    container_name: payment_method_filter
+    container_name: payment_method_filter_1
     depends_on:
       rabbitmq:
         condition: service_healthy
@@ -59,16 +172,16 @@ services:
       - RABBITMQ_HOST=rabbitmq
       - OPERATION_TYPE=payment_method_filter
       - INPUT_MIDDLEWARE_TYPE=queue
-      - INPUT_QUEUE=range_transactions
+      - INPUT_QUEUE=range_transactions_5
       - OUTPUT_MIDDLEWARE_TYPE=queue
-      - OUTPUTS=filtered_payments
+      - OUTPUTS=filtered_payments_5
       - PAYMENT_METHODS=Wire,ACH
-
-  currency_normalizer:
+      - EOF_CONTROL_QUEUE=eof_control_queue_5
+  currency_normalizer_1:
     build:
       context: ./src/
       dockerfile: workers/worker/Dockerfile
-    container_name: currency_normalizer
+    container_name: currency_normalizer_1
     depends_on:
       rabbitmq:
         condition: service_healthy
@@ -76,16 +189,16 @@ services:
       - RABBITMQ_HOST=rabbitmq
       - OPERATION_TYPE=currency_normalizer
       - INPUT_MIDDLEWARE_TYPE=queue
-      - INPUT_QUEUE=filtered_payments
+      - INPUT_QUEUE=filtered_payments_5
       - OUTPUT_MIDDLEWARE_TYPE=queue
-      - OUTPUTS=minor_transactions_candidates
+      - OUTPUTS=minor_transactions_candidates_5
       - TARGET_CURRENCY=USD
-
-  amount_filter:
+      - EOF_CONTROL_QUEUE=eof_control_queue_5
+  amount_filter_1:
     build:
       context: ./src/
       dockerfile: workers/worker/Dockerfile
-    container_name: amount_filter
+    container_name: amount_filter_1
     depends_on:
       rabbitmq:
         condition: service_healthy
@@ -93,23 +206,138 @@ services:
       - RABBITMQ_HOST=rabbitmq
       - OPERATION_TYPE=amount_filter
       - INPUT_MIDDLEWARE_TYPE=queue
-      - INPUT_QUEUE=minor_transactions_candidates
+      - INPUT_QUEUE=minor_transactions_candidates_5
       - OUTPUT_MIDDLEWARE_TYPE=queue
-      - OUTPUTS=minor_transactions
-      - MINIMUM_AMOUNT=1
-
-  payment_method_counter:
+      - OUTPUTS=minor_transactions_5
+      - MINIMUM_AMOUNT=55
+      - EOF_CONTROL_QUEUE=eof_control_queue_5
+      - AMOUNT_FIELD=normalized_amount_received
+  # amount_filter_2:
+  #   build:
+  #     context: ./src/
+  #     dockerfile: workers/worker/Dockerfile
+  #   container_name: amount_filter_2
+  #   depends_on:
+  #     rabbitmq:
+  #       condition: service_healthy
+  #   environment:
+  #     - RABBITMQ_HOST=rabbitmq
+  #     - OPERATION_TYPE=amount_filter
+  #     - INPUT_MIDDLEWARE_TYPE=queue
+  #     - INPUT_QUEUE=range_transactions
+  #     - OUTPUT_MIDDLEWARE_TYPE=queue
+  #     - OUTPUTS=minor_transactions
+  #     - MINIMUM_AMOUNT=50
+  #     - EOF_CONTROL_QUEUE=eof_control_queue_5
+  # amount_filter_3:
+  #   build:
+  #     context: ./src/
+  #     dockerfile: workers/worker/Dockerfile
+  #   container_name: amount_filter_3
+  #   depends_on:
+  #     rabbitmq:
+  #       condition: service_healthy
+  #   environment:
+  #     - RABBITMQ_HOST=rabbitmq
+  #     - OPERATION_TYPE=amount_filter
+  #     - INPUT_MIDDLEWARE_TYPE=queue
+  #     - INPUT_QUEUE=range_transactions
+  #     - OUTPUT_MIDDLEWARE_TYPE=queue
+  #     - OUTPUTS=minor_transactions
+  #     - MINIMUM_AMOUNT=50
+  #     - EOF_CONTROL_QUEUE=eof_control_queue_5
+  # payment_method_counter_1:
+  #   build:
+  #     context: ./src/
+  #     dockerfile: operations/counters/Dockerfile
+  #   command: ["python3", "-m", "operations.counters.payment_method_counter_main"]
+  #   container_name: payment_method_counter_1
+  #   depends_on:
+  #     rabbitmq:
+  #       condition: service_healthy
+  #   environment:
+  #     - RABBITMQ_HOST=rabbitmq
+  #     - OPERATION_TYPE=payment_method_counter
+  #     - INPUT_MIDDLEWARE_TYPE=queue
+  #     - INPUT_QUEUE=minor_transactions_5
+  #     - OUTPUT_MIDDLEWARE_TYPE=queue
+  #     - OUTPUTS=local_count_transactions_5
+  # currency_filter_1:
+  #   build:
+  #     context: ./src/
+  #     dockerfile: workers/worker/Dockerfile
+  #   container_name: currency_filter_1
+  #   depends_on:
+  #     rabbitmq:
+  #       condition: service_healthy
+  #   environment:
+  #     - RABBITMQ_HOST=rabbitmq
+  #     - OPERATION_TYPE=currency_filter
+  #     - INPUT_MIDDLEWARE_TYPE=queue
+  #     - INPUT_QUEUE=minor_query
+  #     - OUTPUT_MIDDLEWARE_TYPE=queue
+  #     - OUTPUTS=USD_transactions
+  #     - CURRENCY=US Dollar
+  #     - EOF_CONTROL_QUEUE=eof_control_queue_5
+  # currency_filter_2:
+  #   build:
+  #     context: ./src/
+  #     dockerfile: workers/worker/Dockerfile
+  #   container_name: currency_filter_2
+  #   depends_on:
+  #     rabbitmq:
+  #       condition: service_healthy
+  #   environment:
+  #     - RABBITMQ_HOST=rabbitmq
+  #     - OPERATION_TYPE=currency_filter
+  #     - INPUT_MIDDLEWARE_TYPE=queue
+  #     - INPUT_QUEUE=minor_query
+  #     - OUTPUT_MIDDLEWARE_TYPE=queue
+  #     - OUTPUTS=USD_transactions
+  #     - CURRENCY=US Dollar
+  #     - EOF_CONTROL_QUEUE=eof_control_queue_5
+  # currency_filter_3:
+  #   build:
+  #     context: ./src/
+  #     dockerfile: workers/worker/Dockerfile
+  #   container_name: currency_filter_3
+  #   depends_on:
+  #     rabbitmq:
+  #       condition: service_healthy
+  #   environment:
+  #     - RABBITMQ_HOST=rabbitmq
+  #     - OPERATION_TYPE=currency_filter
+  #     - INPUT_MIDDLEWARE_TYPE=queue
+  #     - INPUT_QUEUE=minor_query
+  #     - OUTPUT_MIDDLEWARE_TYPE=queue
+  #     - OUTPUTS=USD_transactions
+  #     - CURRENCY=US Dollar
+  #     - EOF_CONTROL_QUEUE=eof_control_queue_5
+  payment_method_counter_1:
     build:
-      context: ./src/
-      dockerfile: workers/worker/Dockerfile
-    container_name: payment_method_counter
+      context: ./src
+      dockerfile: operations/counters/Dockerfile
+    # command: ["python3", "-m", "operations.counters.payment_method_counter_main"]
+    container_name: payment_method_counter_1
     depends_on:
       rabbitmq:
         condition: service_healthy
     environment:
       - RABBITMQ_HOST=rabbitmq
-      - OPERATION_TYPE=payment_method_counter
-      - INPUT_MIDDLEWARE_TYPE=queue
-      - INPUT_QUEUE=minor_transactions
-      - OUTPUT_MIDDLEWARE_TYPE=queue
-      - OUTPUTS=count_transactions
+      - INPUT_QUEUE=minor_transactions_5
+      - AGGREGATION_PREFIX=local_count_transactions
+      - AGGREGATION_AMOUNT=1
+      - CONTROL_EXCHANGE=payment_counter_control_exchange
+  eof_tracker:
+    build:
+      context: ./src/
+      dockerfile: tracker/Dockerfile
+    container_name: eof_tracker
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    environment:
+      - RABBITMQ_HOST=rabbitmq
+      - EOF_CONTROL_QUEUE=eof_control_queue_5
+      - FINAL_QUEUE=minor_transactions_5
+      - TOPOLOGY=gateway,projection_dispatcher,date_range_filter,payment_method_filter,currency_normalizer,amount_filter
