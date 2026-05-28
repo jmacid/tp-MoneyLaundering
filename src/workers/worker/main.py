@@ -5,6 +5,7 @@ from workers.consumers.queue_consumer import QueueConsumer
 from workers.dispatchers.exchange_dispatcher import ExchangeDispatcher
 from workers.dispatchers.projection_dispatcher import ProjectionDispatcher
 from workers.dispatchers.queue_dispatcher import QueueDispatcher
+from workers.dispatchers.sharding_dispatcher import ShardingDispatcher
 from operations.core.operation_factory import OperationFactory
 import json
 from common import middleware
@@ -40,6 +41,9 @@ def initialize_dispatcher():
 
     if middleware_type == "exchange":
         return ExchangeDispatcher()
+
+    if middleware_type == "sharding_exchange":
+        return ShardingDispatcher()
 
     raise ValueError(
         f"Unsupported OUTPUT_MIDDLEWARE_TYPE: {middleware_type}"

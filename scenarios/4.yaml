@@ -62,11 +62,43 @@ services:
       - INPUT_QUEUE=transactions
       - OUTPUTS=minor_query,max_query,avg_query,scatter_gather_query,count_query
       - EOF_CONTROL_QUEUE=eof_control_queue_4
+  projection_dispatcher_2:
+    build:
+      context: ./src/
+      dockerfile: workers/worker/Dockerfile
+    container_name: projection_dispatcher_2
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    environment:
+      - RABBITMQ_HOST=rabbitmq
+      - OPERATION_TYPE=projection_dispatcher
+      - INPUT_MIDDLEWARE_TYPE=queue
+      - INPUT_QUEUE=transactions
+      - OUTPUTS=minor_query,max_query,avg_query,scatter_gather_query,count_query
+      - EOF_CONTROL_QUEUE=eof_control_queue_4
   currency_filter_1:
     build:
       context: ./src/
       dockerfile: workers/worker/Dockerfile
     container_name: currency_filter_1
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    environment:
+      - RABBITMQ_HOST=rabbitmq
+      - OPERATION_TYPE=currency_filter
+      - INPUT_MIDDLEWARE_TYPE=queue
+      - INPUT_QUEUE=minor_query
+      - OUTPUT_MIDDLEWARE_TYPE=queue
+      - OUTPUTS=USD_transactions_4
+      - CURRENCY=US Dollar
+      - EOF_CONTROL_QUEUE=eof_control_queue_4
+  currency_filter_2:
+    build:
+      context: ./src/
+      dockerfile: workers/worker/Dockerfile
+    container_name: currency_filter_2
     depends_on:
       rabbitmq:
         condition: service_healthy
@@ -92,8 +124,30 @@ services:
       - OPERATION_TYPE=date_range_filter
       - INPUT_MIDDLEWARE_TYPE=queue
       - INPUT_QUEUE=USD_transactions_4
-      - OUTPUT_MIDDLEWARE_TYPE=queue
-      - OUTPUTS=account_shards_4
+      - OUTPUT_MIDDLEWARE_TYPE=sharding_exchange
+      - OUTPUT_EXCHANGE=account_shards_4
+      - SHARDS_COUNT=2
+      - SHARDING_KEY_FIELD=from_account
+      - START_DATE=2022-09-01T00:15:00
+      - END_DATE=2022-09-01T00:30:00
+      - EOF_CONTROL_QUEUE=eof_control_queue_4
+  date_range_filter_2:
+    build:
+      context: ./src/
+      dockerfile: workers/worker/Dockerfile
+    container_name: date_range_filter_2
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    environment:
+      - RABBITMQ_HOST=rabbitmq
+      - OPERATION_TYPE=date_range_filter
+      - INPUT_MIDDLEWARE_TYPE=queue
+      - INPUT_QUEUE=USD_transactions_4
+      - OUTPUT_MIDDLEWARE_TYPE=sharding_exchange
+      - OUTPUT_EXCHANGE=account_shards_4
+      - SHARDS_COUNT=2
+      - SHARDING_KEY_FIELD=from_account
       - START_DATE=2022-09-01T00:15:00
       - END_DATE=2022-09-01T00:30:00
       - EOF_CONTROL_QUEUE=eof_control_queue_4
@@ -108,13 +162,31 @@ services:
     environment:
       - RABBITMQ_HOST=rabbitmq
       - OPERATION_TYPE=destination_filter
-      - INPUT_MIDDLEWARE_TYPE=queue
-      - INPUT_QUEUE=account_shards_4
+      - INPUT_MIDDLEWARE_TYPE=exchange
+      - INPUT_EXCHANGE=account_shards_4
+      - INPUT_ROUTING_KEYS=account_shards_4_0
       - OUTPUT_MIDDLEWARE_TYPE=queue
       - OUTPUTS=bridge_account_shards_4
       - DESTINATION_ACC_REQUIRED=3
       - EOF_CONTROL_QUEUE=eof_control_queue_4
-
+  destination_filter_2:
+    build:
+      context: ./src/
+      dockerfile: workers/worker/Dockerfile
+    container_name: destination_filter_2
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    environment:
+      - RABBITMQ_HOST=rabbitmq
+      - OPERATION_TYPE=destination_filter
+      - INPUT_MIDDLEWARE_TYPE=exchange
+      - INPUT_EXCHANGE=account_shards_4
+      - INPUT_ROUTING_KEYS=account_shards_4_1
+      - OUTPUT_MIDDLEWARE_TYPE=queue
+      - OUTPUTS=bridge_account_shards_4
+      - DESTINATION_ACC_REQUIRED=3
+      - EOF_CONTROL_QUEUE=eof_control_queue_4
   scatter_gather_detector_1:
     build:
       context: ./src/
@@ -129,7 +201,6 @@ services:
       - INPUT_QUEUE=bridge_account_shards_4
       - OUTPUT_QUEUE=scatter_gather_accounts_4
       - EOF_CONTROL_QUEUE=eof_control_queue_4
-
   eof_tracker:
     build:
       context: ./src/
