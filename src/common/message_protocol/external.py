@@ -3,11 +3,10 @@ from . import external_serializer
 import json
 
 class MsgType:
-    TRANSACTION_RECORD = 1
-    # TRANSACTION_TOP = 2
-    ACK = 3
-    END_OF_RECODS = 4
-    MINOR_RESULT = 5
+    BATCH_RECORD = 1
+    ACK = 2
+    END_OF_RECODS = 3
+    MINOR_RESULT = 4
 
 
 def _recv_sized(socket, size):
