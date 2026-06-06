@@ -45,19 +45,6 @@ def normalize_row(row: list[str]) -> tuple[str, ...]:
     return tuple(value.strip() for value in row)
 
 
-def is_minor_transaction(row: list[str]) -> bool:
-    """
-    Rule: transaction paid in the target currency with an amount below
-    the configured threshold.
-    """
-    try:
-        amount_paid = Decimal(row[AMOUNT_PAID].strip())
-        payment_currency = row[PAYMENT_CURRENCY].strip()
-    except (InvalidOperation, IndexError):
-        return False
-
-    return payment_currency == TARGET_CURRENCY and amount_paid < THRESHOLD
-
 def project_max_transaction_by_bank(row: list[str]) -> list[str]:
     """
     Project the output row for the max USD transaction by source bank.
@@ -101,6 +88,17 @@ def generate_expected_max_usd_transaction_by_bank(
             if not line:
                 break
 
+            current_bytes = infile.tell()
+            percentage = int((current_bytes / total_bytes) * 100)
+
+            if percentage != last_printed_percentage:
+                print_progress(
+                    current_bytes,
+                    total_bytes,
+                    "Calculating max USD transaction by bank",
+                )
+                last_printed_percentage = percentage
+
             row = next(csv.reader([line]))
 
             if not row:
@@ -127,17 +125,6 @@ def generate_expected_max_usd_transaction_by_bank(
 
                 if amount_paid > current_max_amount:
                     max_by_bank[bank_id] = row
-
-            current_bytes = infile.tell()
-            percentage = int((current_bytes / total_bytes) * 100)
-
-            if percentage != last_printed_percentage:
-                print_progress(
-                    current_bytes,
-                    total_bytes,
-                    "Calculating max USD transaction by bank",
-                )
-                last_printed_percentage = percentage
 
     print()
 

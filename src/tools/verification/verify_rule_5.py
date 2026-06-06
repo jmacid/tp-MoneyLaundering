@@ -347,11 +347,6 @@ def read_csv_as_counter(
             if not line:
                 break
 
-            row = next(csv.reader([line]))
-
-            if row:
-                counter[normalize_row(row)] += 1
-
             if progress_label:
                 current_bytes = file.tell()
                 percentage = int((current_bytes / total_bytes) * 100)
@@ -363,6 +358,11 @@ def read_csv_as_counter(
                         progress_label,
                     )
                     last_printed_percentage = percentage
+
+            row = next(csv.reader([line]))
+
+            if row:
+                counter[normalize_row(row)] += 1
 
     if progress_label:
         print_progress(total_bytes, total_bytes, progress_label)

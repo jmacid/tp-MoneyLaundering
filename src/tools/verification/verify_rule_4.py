@@ -92,6 +92,17 @@ def generate_expected_rule_4(input_file: str, expected_file: str) -> None:
             if not line:
                 break
 
+            current_bytes = infile.tell()
+            percentage = int((current_bytes / total_bytes) * 100)
+
+            if percentage != last_printed_percentage:
+                print_progress(
+                    current_bytes,
+                    total_bytes,
+                    progress_label,
+                )
+                last_printed_percentage = percentage
+
             try:
                 row = next(csv.reader([line]))
 
@@ -109,17 +120,6 @@ def generate_expected_rule_4(input_file: str, expected_file: str) -> None:
 
             scatter_by_source[source_account].add(destination_account)
             gather_by_intermediate[source_account].add(destination_account)
-
-            current_bytes = infile.tell()
-            percentage = int((current_bytes / total_bytes) * 100)
-
-            if percentage != last_printed_percentage:
-                print_progress(
-                    current_bytes,
-                    total_bytes,
-                    progress_label,
-                )
-                last_printed_percentage = percentage
 
     print_progress(total_bytes, total_bytes, progress_label)
     print()

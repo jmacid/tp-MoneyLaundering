@@ -108,11 +108,6 @@ def generate_expected_file(input_file: str, expected_file: str) -> None:
             if not line:
                 break
 
-            row = next(csv.reader([line]))
-
-            if row and is_minor_transaction(row):
-                writer.writerow(project_minor_transaction(row))
-
             current_bytes = infile.tell()
             percentage = int((current_bytes / total_bytes) * 100)
 
@@ -123,6 +118,11 @@ def generate_expected_file(input_file: str, expected_file: str) -> None:
                     "Generating expected file",
                 )
                 last_printed_percentage = percentage
+
+            row = next(csv.reader([line]))
+
+            if row and is_minor_transaction(row):
+                writer.writerow(project_minor_transaction(row))
 
     print()
 

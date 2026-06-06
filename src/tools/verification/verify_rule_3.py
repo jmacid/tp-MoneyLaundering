@@ -1,8 +1,7 @@
 import argparse
 import csv
 import os
-from collections import defaultdict
-from datetime import datetime, date
+from collections import Counter, defaultdict
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
 
@@ -63,6 +62,17 @@ def calculate_average_by_payment_format(input_file: str) -> dict[str, Decimal]:
             if not line:
                 break
 
+            current_bytes = infile.tell()
+            percentage = int((current_bytes / total_bytes) * 100)
+
+            if percentage != last_printed_percentage:
+                print_progress(
+                    current_bytes,
+                    total_bytes,
+                    progress_label,
+                )
+                last_printed_percentage = percentage
+
             try:
                 row = next(csv.reader([line]))
 
@@ -89,17 +99,6 @@ def calculate_average_by_payment_format(input_file: str) -> dict[str, Decimal]:
 
             totals_by_format[payment_format] += amount_paid
             counts_by_format[payment_format] += 1
-
-            current_bytes = infile.tell()
-            percentage = int((current_bytes / total_bytes) * 100)
-
-            if percentage != last_printed_percentage:
-                print_progress(
-                    current_bytes,
-                    total_bytes,
-                    progress_label,
-                )
-                last_printed_percentage = percentage
 
     # Force final progress print because the last rows may have been skipped.
     print_progress(total_bytes, total_bytes, progress_label)
@@ -163,6 +162,17 @@ def generate_expected_rule_3(input_file: str, expected_file: str) -> None:
             if not line:
                 break
 
+            current_bytes = infile.tell()
+            percentage = int((current_bytes / total_bytes) * 100)
+
+            if percentage != last_printed_percentage:
+                print_progress(
+                    current_bytes,
+                    total_bytes,
+                    progress_label,
+                )
+                last_printed_percentage = percentage
+
             try:
                 row = next(csv.reader([line]))
 
@@ -196,25 +206,108 @@ def generate_expected_rule_3(input_file: str, expected_file: str) -> None:
             if amount_paid < threshold:
                 writer.writerow(project_rule_3_transaction(row))
 
-            current_bytes = infile.tell()
-            percentage = int((current_bytes / total_bytes) * 100)
-
-            if percentage != last_printed_percentage:
-                print_progress(
-                    current_bytes,
-                    total_bytes,
-                    progress_label,
-                )
-                last_printed_percentage = percentage
-
     # Force final progress print because the last rows may have been skipped.
     print_progress(total_bytes, total_bytes, progress_label)
     print()
 
+def normalize_row(row: list[str]) -> tuple[str, ...]:
+    """
+    Normalize a CSV row before comparing it.
+
+    This avoids false differences caused by leading/trailing spaces.
+    """
+    return tuple(value.strip() for value in row)
+
+
+def read_csv_as_counter(
+    file_path: str,
+    skip_header: bool = False,
+    progress_label: str | None = None,
+) -> Counter:
+    """
+    Read a CSV file as a Counter.
+
+    This allows comparing files regardless of row order while preserving
+    duplicated rows.
+    """
+    counter = Counter()
+    total_bytes = Path(file_path).stat().st_size
+    last_printed_percentage = -1
+
+    with open(file_path, "r", newline="", encoding="utf-8") as file:
+        if skip_header:
+            file.readline()
+
+        while True:
+            line = file.readline()
+
+            if not line:
+                break
+
+            row = next(csv.reader([line]))
+
+            if row:
+                counter[normalize_row(row)] += 1
+
+            if progress_label:
+                current_bytes = file.tell()
+                percentage = int((current_bytes / total_bytes) * 100)
+
+                if percentage != last_printed_percentage:
+                    print_progress(
+                        current_bytes,
+                        total_bytes,
+                        progress_label,
+                    )
+                    last_printed_percentage = percentage
+
+    if progress_label:
+        print_progress(total_bytes, total_bytes, progress_label)
+        print()
+
+    return counter
+
+
+def compare_outputs(expected_file: str, actual_file: str) -> None:
+    """
+    Compare expected and actual output files without relying on row order.
+
+    Rule 3 output files have no header.
+    """
+    expected = read_csv_as_counter(
+        expected_file,
+        skip_header=False,
+        progress_label="Reading expected file",
+    )
+
+    actual = read_csv_as_counter(
+        actual_file,
+        skip_header=False,
+        progress_label="Reading actual file",
+    )
+
+    missing = expected - actual
+    unexpected = actual - expected
+
+    if not missing and not unexpected:
+        print("OK: actual output matches expected output.")
+        return
+
+    print("ERROR: actual output does not match expected output.")
+
+    if missing:
+        print("\nExpected rows missing from actual output:")
+        for row, count in missing.items():
+            print(f"{count}x {row}")
+
+    if unexpected:
+        print("\nUnexpected rows found in actual output:")
+        for row, count in unexpected.items():
+            print(f"{count}x {row}")
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="Generate expected output for rule 3."
+        description="Generate and compare expected output for rule 3."
     )
 
     parser.add_argument(
@@ -227,6 +320,12 @@ def parse_args() -> argparse.Namespace:
         "--expected-file",
         default=os.getenv("EXPECTED_FILE", "RULE_3_expected.csv"),
         help="Expected output CSV file generated by this script.",
+    )
+
+    parser.add_argument(
+        "--actual-file",
+        default=os.getenv("ACTUAL_FILE"),
+        help="Actual output CSV file generated by the TP.",
     )
 
     return parser.parse_args()
@@ -242,12 +341,30 @@ def main() -> None:
         return
 
     print("Starting rule 3 expected output generation...")
+
     generate_expected_rule_3(
         str(input_file),
         str(expected_file),
     )
 
     print(f"Expected output generated: {expected_file}")
+
+    if not args.actual_file:
+        print("Actual output file not provided. Comparison skipped.")
+        return
+
+    actual_file = Path(args.actual_file)
+
+    if not actual_file.exists():
+        print("Actual output file not found. Comparison aborted.")
+        return
+
+    print("Starting comparison...")
+
+    compare_outputs(
+        str(expected_file),
+        str(actual_file),
+    )
 
 
 if __name__ == "__main__":
