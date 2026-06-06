@@ -259,3 +259,127 @@ make verify-all
 make verify-help
 ```
 
+## Comparación alternativa para archivos grandes
+
+Los scripts de verificación comparan los archivos usando `Counter`, es decir, cargan las filas en memoria como un multiset:
+
+```text
+fila normalizada -> cantidad de apariciones
+```
+
+Esto permite comparar sin depender del orden y preservando duplicados.
+
+Sin embargo, si los archivos son demasiado grandes y no entran cómodamente en memoria, se puede usar una alternativa basada en consola con `sort` + `diff`.
+
+Para eso existe el script:
+
+```text
+src/tools/verification/compare.sh
+```
+
+Este script:
+
+```text
+1. Recibe por parámetro el archivo esperado y el archivo actual.
+2. Valida que ambos archivos existan.
+3. Les remueve el header con tail -n +2, salvo que se use --keep-header.
+4. Ordena ambos archivos con sort.
+5. Compara los archivos ordenados con diff.
+6. Si coinciden, imprime OK.
+7. Si son distintos, guarda las diferencias en comparison_output/diff.txt.
+```
+
+### Uso básico
+
+```bash
+./src/tools/verification/compare.sh \
+  --expected-file "src/tools/verification/RULE_1_HI-Medium_Trans.csv" \
+  --actual-file "output/minor_transactions.csv"
+```
+
+Si los archivos coinciden, la salida será:
+
+```text
+OK: files match regardless of row order.
+```
+
+Si son distintos, el script guarda el diff en:
+
+```text
+comparison_output/diff.txt
+```
+
+y muestra las primeras diferencias por consola.
+
+### Archivos sin header
+
+Por defecto, el script saltea la primera línea de ambos archivos, asumiendo que tienen header.
+
+Si los archivos no tienen header, se debe usar:
+
+```bash
+./src/tools/verification/compare.sh \
+  --expected-file "src/tools/verification/RULE_3_HI-Medium_Trans.csv" \
+  --actual-file "output/rule_3_output.csv" \
+  --keep-header
+```
+
+En este contexto, `--keep-header` significa que no se saltea la primera línea.
+
+### Directorio de salida custom
+
+Por defecto, los archivos ordenados temporales y el diff se generan en:
+
+```text
+comparison_output/
+```
+
+Se puede cambiar con:
+
+```bash
+./src/tools/verification/compare.sh \
+  --expected-file "src/tools/verification/RULE_1_HI-Medium_Trans.csv" \
+  --actual-file "output/minor_transactions.csv" \
+  --output-dir "tmp/comparison_rule_1"
+```
+
+### Cuándo usar este script
+
+Usar los verificadores Python normalmente es más cómodo porque generan el expected y comparan en una sola ejecución.
+
+Pero para archivos muy grandes, donde el uso de `Counter` pueda consumir demasiada memoria, conviene usar:
+
+```text
+sort + diff
+```
+
+porque permite comparar sin cargar ambos archivos completos en RAM.
+
+El costo de esta alternativa es que ordenar es más caro computacionalmente:
+
+```text
+Counter: O(n) en tiempo, pero requiere memoria.
+sort + diff: O(n log n) en tiempo, pero usa menos memoria.
+```
+
+### Resumen
+
+```bash
+# Comparar archivos con header
+./src/tools/verification/compare.sh \
+  --expected-file "src/tools/verification/RULE_1_HI-Medium_Trans.csv" \
+  --actual-file "output/minor_transactions.csv"
+
+# Comparar archivos sin header
+./src/tools/verification/compare.sh \
+  --expected-file "src/tools/verification/RULE_3_HI-Medium_Trans.csv" \
+  --actual-file "output/rule_3_output.csv" \
+  --keep-header
+
+# Comparar usando un directorio de salida custom
+./src/tools/verification/compare.sh \
+  --expected-file "src/tools/verification/RULE_1_HI-Medium_Trans.csv" \
+  --actual-file "output/minor_transactions.csv" \
+  --output-dir "tmp/comparison_rule_1"
+```
+
