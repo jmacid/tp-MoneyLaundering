@@ -55,11 +55,11 @@ class Client:
     
     def send_transaction_records(self, input_file):
         pending = PendingBatchesTable()
-        self._stop_event.clear()
+        eof_acked = threading.Event() 
 
         receiver_thread = threading.Thread(
             target=self._receiver_loop,
-            args=(pending, self._stop_event)
+            args=(pending, self._stop_event, eof_acked)
         )
         receiver_thread.start()
 
@@ -69,14 +69,16 @@ class Client:
             self._retry_expired(pending)
             time.sleep(0.1)
 
-        message_protocol.external.send_msg(
-            self.server_socket,
-            message_protocol.external.MsgType.END_OF_RECORDS
-        )
-        logging.info("[send_transaction_records] END_OF_RECORDS sent")
+        while not eof_acked.is_set():
+            message_protocol.external.send_msg(
+                self.server_socket,
+                message_protocol.external.MsgType.END_OF_RECORDS
+            )
+            logging.info("[send_transaction_records] END_OF_RECORDS sended, waiting ACK")
+            eof_acked.wait(timeout=ACK_TIMEOUT_SECONDS)
 
+        logging.info("[send_transaction_records] EOF confirmed by the gateway")
         receiver_thread.join()
-        logging.info("[send_transaction_records] All results received")
 
     def _sender_loop(self, input_file: str, pending: PendingBatchesTable):
         for batch in build_batches(input_file, self.client_id):
@@ -118,7 +120,7 @@ class Client:
             pending.increment_retries(p.batch.sequence_number)
 
 
-    def _receiver_loop(self, pending: PendingBatchesTable, stop_event: threading.Event):
+    def _receiver_loop(self, pending: PendingBatchesTable, stop_event: threading.Event, eof_acked: threading.Event):
         eofs_received = 0
         while not stop_event.is_set():
             try:
@@ -129,6 +131,10 @@ class Client:
                     sequence_number = msg_payload
                     pending.ack(sequence_number)
                     logging.info(f"[_receiver_loop] ACK received for batch {sequence_number}")
+
+                elif msg_type == message_protocol.external.MsgType.ACK_EOF:
+                    logging.info("[_receiver_loop] ACK_EOF received")
+                    eof_acked.set()
 
                 elif msg_type == message_protocol.external.MsgType.MINOR_RESULT:
                     self._save_minor_result(msg_payload)

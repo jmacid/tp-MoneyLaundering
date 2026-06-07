@@ -64,6 +64,10 @@ def handle_client_request(client_socket, message_handler):
                     "emitted": transactions_sent
                 })
                 control_queue.send(eof_msg.encode('utf-8'))
+                message_protocol.external.send_msg(
+                    client_socket,
+                    message_protocol.external.MsgType.ACK_EOF
+                )
                 return
 
     except socket.error:
