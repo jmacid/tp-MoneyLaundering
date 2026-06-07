@@ -1,6 +1,6 @@
 from asyncio import IncompleteReadError
 from . import external_serializer
-from batch import Batch
+from .batch import Batch
 import json
 
 class MsgType:
@@ -24,6 +24,15 @@ def _recv_sized(socket, size):
             raise IncompleteReadError(bytes(buf[:pos]), size)
         pos += n
     return bytes(buf)
+
+def recv_msg(socket):
+    msg_type = external_serializer.deserialize_uint32(
+        _recv_sized(socket, external_serializer.UINT32_SIZE)
+    )
+    msg_handler = RECV_MSG_HANDLERS.get(msg_type)
+    if msg_handler is None:
+        raise ValueError(f"Unknown msg_type: {msg_type}")
+    return (msg_type, msg_handler(socket))
 
 def _recv_string(socket):
     """Helper to receive a dynamically sized string"""
@@ -94,7 +103,7 @@ def _send_ack(socket, msg_type, sequence_number):
     msg += external_serializer.serialize_uint32(sequence_number)
     socket.sendall(msg)
 
-def _send_ack_eof(socket):
+def _send_ack_eof(socket, msg_type):
     socket.sendall(external_serializer.serialize_uint32(MsgType.ACK_EOF))
 
 def _send_end_of_records(socket, msg_type):

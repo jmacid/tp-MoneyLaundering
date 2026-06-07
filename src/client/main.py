@@ -54,6 +54,8 @@ class Client:
             self.server_socket = None
     
     def send_transaction_records(self, input_file):
+        logging.info(f"[send_transaction_records] input_file: {input_file}")
+        logging.info(f"[send_transaction_records] file exists: {os.path.exists(input_file)}")
         pending = PendingBatchesTable()
         eof_acked = threading.Event() 
 

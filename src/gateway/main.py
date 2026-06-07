@@ -36,12 +36,13 @@ def handle_client_request(client_socket, message_handler):
     try:
         while True:
             msg_type, batch = message_protocol.external.recv_msg(client_socket)
-            logging.info(f"[handle_client_request] Message received type {msg_type}, batch {batch.sequence_number}")
-
+            logging.info(f"[handle_client_request] Message received type {msg_type}")
+            
             if msg_type == message_protocol.external.MsgType.BATCH_RECORD:
-                serialized_message = message_handler.serialize_data_message(batch)
-                output_queue.send(serialized_message)
-                transactions_sent += 1
+                for line in batch.lines:
+                    serialized_message = message_handler.serialize_data_message(line)
+                    output_queue.send(serialized_message)
+                    transactions_sent += 1
                 message_protocol.external.send_msg(
                     client_socket,
                     message_protocol.external.MsgType.ACK,
@@ -59,7 +60,7 @@ def handle_client_request(client_socket, message_handler):
             elif msg_type == message_protocol.external.MsgType.END_OF_RECORDS:
                 logging.info(f"[handle_client_request] END_OF_RECORDS received")
                 eof_msg = json.dumps({
-                    "client_id": batch.client_id,
+                    "client_id": message_handler.client_id,
                     "node": "gateway",
                     "emitted": transactions_sent
                 })
@@ -95,7 +96,7 @@ def handle_client_response(client_list):
                 for idx, client_data in enumerate(client_list):
                     if client_data[0] == target_client_id:
                         target_socket = client_data[2]
-                        message_protocol.external.send_msg(target_socket, message_protocol.external.MsgType.END_OF_RECODS)
+                        message_protocol.external.send_msg(target_socket, message_protocol.external.MsgType.END_OF_RECORDS)
                         client_list.pop(idx) 
                         break
                 ack()
