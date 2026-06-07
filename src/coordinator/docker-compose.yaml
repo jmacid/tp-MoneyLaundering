@@ -1,0 +1,32 @@
+services:
+  rabbitmq:
+    image: rabbitmq:3-management
+    container_name: rabbitmq
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    environment:
+      RABBITMQ_DEFAULT_USER: guest
+      RABBITMQ_DEFAULT_PASS: guest
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "check_port_connectivity"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  pipeline_coordinator:
+    build:
+      context: ..
+      dockerfile: coordinator/Dockerfile
+    container_name: pipeline_coordinator
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    environment:
+      PYTHONPATH: /app
+      RABBITMQ_HOST: rabbitmq
+      COORDINATOR_QUEUE: coordinator_control_queue
+      REPORT_RETRY_SECONDS: 5
+      NODE_TIMEOUT_SECONDS: 15
+      MONITOR_INTERVAL_SECONDS: 2
+    restart: unless-stopped

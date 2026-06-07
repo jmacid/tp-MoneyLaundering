@@ -8,8 +8,8 @@ from common import middleware
 
 class QueueConsumer:
 
-    def __init__(self):
-        queue_name = os.getenv("INPUT_QUEUE")
+    def __init__(self, queue_name: str | None = None):
+        queue_name = queue_name or os.getenv("INPUT_QUEUE")
 
         if not queue_name:
             raise ValueError("Missing INPUT_QUEUE")
