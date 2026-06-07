@@ -9,6 +9,7 @@ class MsgType:
     ACK = 3
     END_OF_RECORDS = 4
     MINOR_RESULT = 5
+    ACK_EOF = 6 # --> differentiate from ACK of batch because this don't have sequence_number
 
 def _recv_sized(socket, size):
     """
@@ -74,6 +75,7 @@ RECV_MSG_HANDLERS = {
     MsgType.ACK: _recv_ack,
     MsgType.END_OF_RECORDS: _recv_empty,
     MsgType.MINOR_RESULT: _recv_minor_result,
+    MsgType.ACK_EOF: _recv_empty,
 }
 
 def _send_batch(socket, msg_type, batch):
@@ -92,6 +94,9 @@ def _send_ack(socket, msg_type, sequence_number):
     msg += external_serializer.serialize_uint32(sequence_number)
     socket.sendall(msg)
 
+def _send_ack_eof(socket):
+    socket.sendall(external_serializer.serialize_uint32(MsgType.ACK_EOF))
+
 def _send_end_of_records(socket, msg_type):
     socket.sendall(external_serializer.serialize_uint32(MsgType.END_OF_RECORDS))
 
@@ -107,6 +112,7 @@ SEND_MSG_HANDLERS = {
     MsgType.ACK: _send_ack,
     MsgType.END_OF_RECORDS: _send_end_of_records,
     MsgType.MINOR_RESULT: _send_minor_result,
+    MsgType.ACK_EOF: _send_ack_eof,
 }
 
 def send_msg(socket, msg_type, *args):
