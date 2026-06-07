@@ -37,7 +37,7 @@ class MessageMiddlewareQueueRabbitMQ(MessageMiddlewareQueue):
         self.ch.stop_consuming()
 
 
-class MessageMiddlewareExchangeRabbitMQ(MessageMiddlewareExchange):
+class MessageMiddlewareExchangeDirectRabbitMQ(MessageMiddlewareExchange):
     
     def __init__(self, host, exchange_name, routing_keys):
         connection = pika.BlockingConnection(pika.ConnectionParameters(host))
@@ -78,6 +78,35 @@ class MessageMiddlewareExchangeRabbitMQ(MessageMiddlewareExchange):
         )
 
         self.ch.start_consuming()
+
+    def stop_consuming(self):
+        self.ch.stop_consuming()
+    
+class MessageMiddlewareExchangeFanoutRabbitMQ(MessageMiddlewareExchange):
+    def __init__(self, host, exchange_name):
+        connection = pika.BlockingConnection(pika.ConnectionParameters(host))
+        self.ch = connection.channel()
+        self.exchange_name = exchange_name
+        self.queue_name = None
+        self.ch.exchange_declare(exchange=exchange_name, exchange_type='fanout')
+        self.ch.confirm_delivery()
+
+    def send(self, message):
+        self.ch.basic_publish(exchange=self.exchange_name, routing_key='', body=message)
+
+    def start_consuming(self, callback):
+        result = self.ch.queue_declare(queue='', exclusive=True)
+        self.queue_name = result.method.queue
+        self.ch.queue_bind(exchange=self.exchange_name, queue=self.queue_name) 
+        def pika_callback(ch, method, properties, body):
+            def ack(): ch.basic_ack(delivery_tag=method.delivery_tag)
+            def nack(): ch.basic_nack(delivery_tag=method.delivery_tag)
+            callback(body, ack, nack)
+        self.ch.basic_consume(queue=self.queue_name, on_message_callback=pika_callback, auto_ack=False)
+        self.ch.start_consuming()
+
+    def close(self):
+        self.ch.close()
 
     def stop_consuming(self):
         self.ch.stop_consuming()

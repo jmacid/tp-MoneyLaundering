@@ -5,7 +5,7 @@ from batch import Batch
 
 BATCH_SIZE_BYTES = int(os.getenv("BATCH_SIZE_BYTES", "1024"))
 
-def build_batches(file_path: str, client_id: int):
+def build_batches(file_path: str, client_id: str):
     sequence_number = 0
     current_lines = []
     current_size = 0
@@ -24,7 +24,8 @@ def build_batches(file_path: str, client_id: int):
                 yield Batch(
                     sequence_number=sequence_number,
                     lines=[line],
-                    is_last=False
+                    is_last=False,
+                    client_id=client_id
                 )
                 sequence_number += 1
                 continue
@@ -34,7 +35,8 @@ def build_batches(file_path: str, client_id: int):
                 yield Batch(
                     sequence_number=sequence_number,
                     lines=current_lines,
-                    is_last=False
+                    is_last=False,
+                    client_id=client_id
                 )
                 sequence_number += 1
                 current_lines = []
@@ -48,6 +50,7 @@ def build_batches(file_path: str, client_id: int):
             yield Batch(
                 sequence_number=sequence_number,
                 lines=current_lines,
-                is_last=True
+                is_last=True,
+                client_id=client_id
             )
                 

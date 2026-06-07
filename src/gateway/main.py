@@ -22,80 +22,58 @@ RESOLVERS_COUNT = int(os.getenv("RESOLVERS_COUNT", "1"))
 RESOLVER_EXCHANGE = os.getenv("RESOLVER_EXCHANGE", "max_bank_transactions")
 
 
-def load_bank_mapping(file_path):
-    """Lee el archivo CSV y retorna un diccionario id_bank -> name_bank"""
-    mapping = {}
-    if not os.path.exists(file_path):
-        logging.warning(f"File not founded in {file_path}. Continuing with empty bank mapping.")
-        return mapping
-    try:
-        with open(file_path, mode='r', encoding='utf-8') as f:
-            reader = csv.reader(f)
-            next(reader, None) 
-            for row in reader:
-                if len(row) >= 2:
-                    mapping[row[0].strip()] = row[1].strip()
-    except Exception as e:
-        logging.error(f"Error reading the banks CSV file: {e}")
-    return mapping
-
+def _handle_bank_mapping(batch, resolver_exchange):
+    logging.info(f"[_handle_bank_mapping] Bank mapping batch {batch.sequence_number} recibido")
+    mapping_payload = {"bank_mapping": batch.lines, "is_last": batch.is_last}
+    serialized_map = message_protocol.internal.serialize(mapping_payload)
+    resolver_exchange.send(serialized_map)
 
 def handle_client_request(client_socket, message_handler):
     output_queue = middleware.MessageMiddlewareQueueRabbitMQ(MOM_HOST, OUTPUT_QUEUE)
     control_queue = middleware.MessageMiddlewareQueueRabbitMQ(MOM_HOST, EOF_CONTROL_QUEUE)
-
-    try:
-        bank_map = load_bank_mapping(BANKS_CSV_PATH)
-        if bank_map:
-            logging.info(f"Sending catalog of {len(bank_map)} banks to the Resolver replicas")
-            mapping_payload = {"bank_mapping": bank_map}
-            serialized_map = message_protocol.internal.serialize(mapping_payload)
-            
-            for i in range(RESOLVERS_COUNT):
-                resolver_exchange = middleware.MessageMiddlewareExchangeRabbitMQ(
-                    MOM_HOST, RESOLVER_EXCHANGE, [f"{RESOLVER_EXCHANGE}{i}"]
-                )
-                resolver_exchange.send(serialized_map)
-                resolver_exchange.close()
-    except Exception as e:
-        logging.error(f"Error distributing the banks catalog: {e}")
-
+    resolver_exchange = middleware.MessageMiddlewareExchangeFanoutRabbitMQ(MOM_HOST, RESOLVER_EXCHANGE )
     transactions_sent = 0
-
     try:
         while True:
-            message = message_protocol.external.recv_msg(client_socket)
-            logging.info(f"message received: {message}")
-            
-            if message[0] == message_protocol.external.MsgType.TRANSACTION_RECORD:
-                serialized_message = message_handler.serialize_data_message(message[1])
+            msg_type, batch = message_protocol.external.recv_msg(client_socket)
+            logging.info(f"[handle_client_request] Message received type {msg_type}, batch {batch.sequence_number}")
+
+            if msg_type == message_protocol.external.MsgType.BATCH_RECORD:
+                serialized_message = message_handler.serialize_data_message(batch)
                 output_queue.send(serialized_message)
                 transactions_sent += 1
                 message_protocol.external.send_msg(
-                    client_socket, message_protocol.external.MsgType.ACK
+                    client_socket,
+                    message_protocol.external.MsgType.ACK,
+                    batch.sequence_number
                 )
 
-            if message[0] == message_protocol.external.MsgType.END_OF_RECODS:
-                logging.info(f"End of records: {message[1]}")
+            elif msg_type == message_protocol.external.MsgType.BANK_MAPPING:
+                _handle_bank_mapping(batch, resolver_exchange)
+                message_protocol.external.send_msg(
+                    client_socket,
+                    message_protocol.external.MsgType.ACK,
+                    batch.sequence_number
+                )
+
+            elif msg_type == message_protocol.external.MsgType.END_OF_RECORDS:
+                logging.info(f"[handle_client_request] END_OF_RECORDS received")
                 eof_msg = json.dumps({
-                    "client_id": message_handler.client_id,
+                    "client_id": batch.client_id,
                     "node": "gateway",
                     "emitted": transactions_sent
                 })
                 control_queue.send(eof_msg.encode('utf-8'))
-
-                message_protocol.external.send_msg(
-                    client_socket, message_protocol.external.MsgType.ACK
-                )
                 return
+
     except socket.error:
-        logging.error("The connection with the server was lost")
+        logging.error("[handle_client_request] The connection with the server was lost")
     except Exception as e:
-        logging.error(e)
+        logging.error(f"[handle_client_request] {e}")
     finally:
         output_queue.close()
         control_queue.close()
-
+        resolver_exchange.close()
 
 def handle_client_response(client_list):
     logging.basicConfig(level=logging.INFO)

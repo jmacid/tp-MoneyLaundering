@@ -20,10 +20,12 @@ ACK_TIMEOUT_SECONDS = float(os.getenv("ACK_TIMEOUT_SECONDS", "5.0"))
 MAX_RETRIES = int(os.getenv("MAX_RETRIES", "3"))
 
 EXPECTED_EOFS = int(os.getenv("EXPECTED_EOFS", "5"))
+CLIENT_ID = os.getenv("CLIENT_ID")
 
 
 class Client:
     def __init__(self):
+        self.client_id = CLIENT_ID
         self.closed = False
         self._stop_event = threading.Event()
         self._prev_sigterm_handler = signal.signal(signal.SIGTERM, self.handle_sigterm)
@@ -77,7 +79,7 @@ class Client:
         logging.info("[send_transaction_records] All results received")
 
     def _sender_loop(self, input_file: str, pending: PendingBatchesTable):
-        for batch in build_batches(input_file):
+        for batch in build_batches(input_file, self.client_id):
 
             while pending.is_full():
                 self._retry_expired(pending)
