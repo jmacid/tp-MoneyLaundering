@@ -23,6 +23,7 @@ COORDINATOR_QUEUE = os.getenv("COORDINATOR_QUEUE", "coordinator_control_queue")
 REPORT_RETRY_SECONDS = int(os.getenv("REPORT_RETRY_SECONDS", "5"))
 NODE_TIMEOUT_SECONDS = int(os.getenv("NODE_TIMEOUT_SECONDS", "300"))
 MONITOR_INTERVAL_SECONDS = int(os.getenv("MONITOR_INTERVAL_SECONDS", "15"))
+HEARTBEAT_INTERVAL = int(os.getenv("HEARTBEAT_INTERVAL", "180"))
 
 
 @dataclass
@@ -188,7 +189,7 @@ class PipelineCoordinator:
             {
                 "event": "WELCOME",
                 "node_id": node_id,
-                "heartbeat_interval_seconds": 180,
+                "heartbeat_interval_seconds": HEARTBEAT_INTERVAL,
                 "timeout_seconds": NODE_TIMEOUT_SECONDS,
             }
         )
@@ -263,6 +264,7 @@ class PipelineCoordinator:
           "client_id": "client_1",
           "stage_id": "currency_filter",
           "node_id": "currency_filter_2"
+          "rule_id": "1"
         }
         """
         client_id = self.required(event, "client_id")
@@ -282,7 +284,7 @@ class PipelineCoordinator:
 
             active_nodes = {
                 node_id
-                for node_id in self.nodes_by_stage[rule_id].get(stage_id, set())
+                for node_id in self.nodes_by_stage.get(rule_id, {}).get(stage_id, set())
                 if self.nodes[node_id].status == "ACTIVE"
             }
 
@@ -437,6 +439,8 @@ class PipelineCoordinator:
                 return
 
             self.expected_inputs[request.client_id][next_stage_id] = total_emitted
+        
+        self.notify_current_stage_completed(request)
 
         logging.info(
             "Stage completed | request_id=%s client_id=%s rule_id=%s next_stage_id=%s next_expected_input=%s",
@@ -520,7 +524,7 @@ class PipelineCoordinator:
                         continue
 
                     if now - node.last_seen > NODE_TIMEOUT_SECONDS:
-                        node.status = "ACTIVE" # "DOWN"
+                        node.status = "DOWN"
 
                         logging.warning(
                             "Node marked DOWN | node_id=%s rule_id=%s",
@@ -567,6 +571,43 @@ class PipelineCoordinator:
         )
 
         self.request_reports(request_id)
+
+    def notify_current_stage_completed(self, request: EofRequest) -> None:
+        message = {
+            "event": "RELEASE_CLIENT",
+            "request_id": request.request_id,
+            "client_id": request.client_id,
+            "rule_id": request.rule_id,
+            "stage_id": request.stage_id,
+        }
+
+        with self.lock:
+            nodes_to_notify = list(request.expected_nodes)
+
+            messages = []
+
+            for node_id in nodes_to_notify:
+                node = self.nodes.get(node_id)
+
+                if not node:
+                    continue
+
+                messages.append((node.control_queue, message))
+
+        for queue_name, payload in messages:
+            self.publisher.publish(
+                queue_name,
+                payload,
+            )
+
+        logging.info(
+            "RELEASE_CLIENT sent | request_id=%s client_id=%s rule_id=%s stage_id=%s nodes=%s",
+            request.request_id,
+            request.client_id,
+            request.rule_id,
+            request.stage_id,
+            sorted(nodes_to_notify),
+        )
 
     @staticmethod
     def required(event: dict[str, Any], key: str) -> Any:
