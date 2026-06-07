@@ -110,6 +110,12 @@ class PipelineCoordinator:
         self.publisher = QueuePublisher()
 
     def start(self) -> None:
+        """Start the coordinator service.
+
+        Starts the background retry and node monitoring loops, then begins consuming
+        coordinator control messages from the configured queue.
+        """
+
         logging.info("PipelineCoordinator started")
         logging.info("Coordinator queue: %s", COORDINATOR_QUEUE)
 
@@ -119,6 +125,12 @@ class PipelineCoordinator:
         self.channel.start(self.on_message)
 
     def on_message(self, event: dict[str, Any]) -> None:
+        """Process a coordinator control event.
+
+        Delegates the event to the corresponding handler and logs any unexpected
+        processing error without stopping the coordinator.
+        """
+
         try:
             self.handle_event(event)
 
@@ -126,6 +138,12 @@ class PipelineCoordinator:
             logging.exception("Error processing coordinator event")
 
     def handle_event(self, event: dict[str, Any]) -> None:
+        """Route a control event to its specific handler.
+
+        Uses the event type to dispatch the message to the corresponding coordinator
+        handler. Unknown event types are logged and ignored.
+        """
+
         event_type = event.get("event")
 
         if event_type == "HELLO":
@@ -149,11 +167,19 @@ class PipelineCoordinator:
         else:
             logging.warning("Unknown event: %s | payload=%s", event_type, event)
 
+
     # ---------------------------------------------------------
-    # Registro dinámico
+    # Coordinator handlers
     # ---------------------------------------------------------
 
     def handle_hello(self, event: dict[str, Any]) -> None:
+        """Register a worker node in the coordinator.
+
+        Stores the node metadata, associates it with its rule and stage, optionally
+        records the next stage in the pipeline, and sends back the heartbeat settings
+        through the node control queue.
+        """
+
         node_id = self.required(event, "node_id")
         stage_id = self.required(event, "stage_id")
         rule_id = self.required(event, "rule_id")
@@ -176,13 +202,7 @@ class PipelineCoordinator:
             if next_stage_id:
                 self.next_stage_by_stage[rule_id][stage_id] = next_stage_id
 
-        logging.info(
-            "Node registered | node_id=%s rule_id=%s next_rule_id=%s control_queue=%s",
-            node_id,
-            rule_id,
-            next_stage_id,
-            control_queue,
-        )
+        logging.info("Node registered | node_id=%s rule_id=%s next_rule_id=%s control_queue=%s", node_id, rule_id, next_stage_id, control_queue)
 
         self.publisher.publish(
             control_queue,
@@ -195,6 +215,12 @@ class PipelineCoordinator:
         )
 
     def handle_heartbeat(self, event: dict[str, Any]) -> None:
+        """Update the liveness state of a registered node.
+
+        Marks the node as active and refreshes its last seen timestamp. Heartbeats from
+        unknown nodes are logged and ignored.
+        """
+
         node_id = self.required(event, "node_id")
 
         with self.lock:
@@ -208,6 +234,12 @@ class PipelineCoordinator:
             node.last_seen = time.time()
 
     def handle_goodbye(self, event: dict[str, Any]) -> None:
+        """Handle a graceful node shutdown notification.
+
+        Marks the registered node as stopped so it is no longer considered active by
+        the coordinator. Unknown nodes are ignored.
+        """
+
         node_id = self.required(event, "node_id")
 
         with self.lock:
@@ -220,22 +252,14 @@ class PipelineCoordinator:
 
         logging.info("Node stopped | node_id=%s", node_id)
 
-    # ---------------------------------------------------------
-    # EOF inicial desde gateway
-    # ---------------------------------------------------------
-
     def handle_initial_eof(self, event: dict[str, Any]) -> None:
-        """
-        El gateway informa cuántas transacciones le mandó a la primera rule.
+        """Register the expected input for the first pipeline stage.
 
-        Ejemplo:
-        {
-          "event": "INITIAL_EOF",
-          "client_id": "client_1",
-          "to_stage_id": "currency_filter",
-          "expected_input": 10000
-        }
+        Stores the total number of transactions sent by the gateway for a client. This
+        value is later used to validate when the first stage has fully processed its
+        input.
         """
+
         client_id = self.required(event, "client_id")
         to_stage_id = self.required(event, "to_stage_id")
         expected_input = int(self.required(event, "expected_input"))
@@ -243,29 +267,15 @@ class PipelineCoordinator:
         with self.lock:
             self.expected_inputs[client_id][to_stage_id] = expected_input
 
-        logging.info(
-            "Initial expected input registered | client_id=%s rule_id=%s expected_input=%s",
-            client_id,
-            to_stage_id,
-            expected_input,
-        )
-
-    # ---------------------------------------------------------
-    # EOF detectado por algún nodo de la etapa
-    # ---------------------------------------------------------
+        logging.info("Initial expected input registered | client_id=%s rule_id=%s expected_input=%s", client_id, to_stage_id, expected_input)
 
     def handle_eof_detected(self, event: dict[str, Any]) -> None:
-        """
-        Un nodo vio el EOF en su etapa y avisa al coordinator.
+        """Open an EOF coordination round for a stage.
 
-        Ejemplo:
-        {
-          "event": "EOF_DETECTED",
-          "client_id": "client_1",
-          "stage_id": "currency_filter",
-          "node_id": "currency_filter_2"
-          "rule_id": "1"
-        }
+        Triggered when a node reports that it detected EOF for a client. The coordinator
+        validates that the stage has a known expected input, takes a snapshot of the
+        active nodes for that rule and stage, creates an EOF request, and asks those
+        nodes to report their local counters.
         """
         client_id = self.required(event, "client_id")
         stage_id = self.required(event, "stage_id")
@@ -275,11 +285,7 @@ class PipelineCoordinator:
             expected_input = self.expected_inputs[client_id].get(stage_id)
 
             if expected_input is None:
-                logging.error(
-                    "EOF detected but expected_input is unknown | client_id=%s stage_id=%s",
-                    client_id,
-                    stage_id,
-                )
+                logging.error("EOF detected but expected_input is unknown | client_id=%s stage_id=%s", client_id, stage_id)
                 return
 
             active_nodes = {
@@ -289,11 +295,7 @@ class PipelineCoordinator:
             }
 
             if not active_nodes:
-                logging.error(
-                    "EOF detected but no active nodes found | client_id=%s stage_id=%s",
-                    client_id,
-                    stage_id,
-                )
+                logging.error("EOF detected but no active nodes found | client_id=%s stage_id=%s", client_id, stage_id)
                 return
 
             request_id = self.create_request_id(client_id, stage_id)
@@ -309,34 +311,18 @@ class PipelineCoordinator:
 
             self.pending_requests[request_id] = request
 
-        logging.info(
-            "EOF round opened | request_id=%s client_id=%s rule_id=%s expected_input=%s expected_nodes=%s",
-            request_id,
-            client_id,
-            stage_id,
-            expected_input,
-            sorted(active_nodes),
-        )
-
+        logging.info("EOF round opened | request_id=%s client_id=%s rule_id=%s expected_input=%s expected_nodes=%s", request_id, client_id, stage_id, expected_input, sorted(active_nodes))
         self.request_reports(request_id)
 
-    # ---------------------------------------------------------
-    # Reportes de los nodos
-    # ---------------------------------------------------------
-
     def handle_eof_report(self, event: dict[str, Any]) -> None:
+        """Store a node EOF report and try to close the request.
+
+        Updates the latest processed and emitted counters for the reporting node,
+        ignoring unknown requests, completed requests, and reports from nodes that were
+        not part of the EOF round snapshot. After storing the report, attempts to close
+        the EOF request.
         """
-        Ejemplo:
-        {
-          "event": "EOF_REPORT",
-          "request_id": "client_1:currency_filter:abc",
-          "client_id": "client_1",
-          "rule_id": "currency_filter",
-          "node_id": "currency_filter_1",
-          "processed": 4000,
-          "emitted": 2500
-        }
-        """
+
         request_id = self.required(event, "request_id")
         node_id = self.required(event, "node_id")
         processed = int(self.required(event, "processed"))
@@ -378,6 +364,14 @@ class PipelineCoordinator:
         self.try_close_request(request_id)
 
     def try_close_request(self, request_id: str) -> None:
+        """Try to complete an EOF coordination round.
+
+        Checks whether all expected nodes have reported and whether the aggregated
+        processed count matches the expected input. If the stage is complete, marks the
+        request as completed, registers the emitted count as the next stage input,
+        notifies the current stage to release client state, and starts the next EOF
+        round.
+        """
         with self.lock:
             request = self.pending_requests.get(request_id)
 
@@ -458,11 +452,12 @@ class PipelineCoordinator:
             expected_input=total_emitted,
         )
 
-    # ---------------------------------------------------------
-    # Request/retry de reportes
-    # ---------------------------------------------------------
-
     def request_reports(self, request_id: str) -> None:
+        """Request EOF reports from all nodes in a pending EOF round.
+
+        Sends a report request to each node that belongs to the request snapshot and
+        updates the retry metadata for the round.
+        """
         with self.lock:
             request = self.pending_requests.get(request_id)
 
@@ -491,6 +486,11 @@ class PipelineCoordinator:
         )
 
     def retry_loop(self) -> None:
+        """Retry pending EOF report requests.
+
+        Periodically scans waiting EOF rounds and re-sends report requests when the
+        configured retry interval has elapsed.
+        """
         while True:
             now = time.time()
 
@@ -510,11 +510,12 @@ class PipelineCoordinator:
 
             time.sleep(1)
 
-    # ---------------------------------------------------------
-    # Monitor de nodos
-    # ---------------------------------------------------------
-
     def node_monitor_loop(self) -> None:
+        """Monitor registered node liveness.
+
+        Periodically checks the last heartbeat timestamp of each active node and marks
+        nodes as down when they exceed the configured timeout.
+        """
         while True:
             now = time.time()
 
@@ -534,13 +535,13 @@ class PipelineCoordinator:
 
             time.sleep(MONITOR_INTERVAL_SECONDS)
 
-    def start_eof_round(
-        self,
-        client_id: str,
-        rule_id: str,
-        stage_id:str,
-        expected_input: int,
-    ) -> None:
+    def start_eof_round(self, client_id: str, rule_id: str, stage_id:str, expected_input: int) -> None:
+        """Start an EOF coordination round for a stage.
+
+        Creates a new EOF request using the currently active nodes for the given rule
+        and stage, then asks those nodes to report their local counters. If no active
+        nodes are available, the round is not started.
+        """
         active_nodes = {
             node_id
             for node_id in self.nodes_by_stage[rule_id].get(stage_id, set())
@@ -573,6 +574,12 @@ class PipelineCoordinator:
         self.request_reports(request_id)
 
     def notify_current_stage_completed(self, request: EofRequest) -> None:
+        """Notify current-stage nodes that client state can be released.
+
+        Sends a release message to every node that participated in the completed EOF
+        round, allowing them to clean local counters, buffers, or temporary state for
+        the client.
+        """
         message = {
             "event": "RELEASE_CLIENT",
             "request_id": request.request_id,
@@ -611,6 +618,10 @@ class PipelineCoordinator:
 
     @staticmethod
     def required(event: dict[str, Any], key: str) -> Any:
+        """Return a required event field.
+
+        Raises a ValueError when the field is missing or empty.
+        """
         value = event.get(key)
 
         if value is None or value == "":
@@ -620,6 +631,10 @@ class PipelineCoordinator:
 
     @staticmethod
     def create_request_id(client_id: str, rule_id: str) -> str:
+        """Create a unique EOF request identifier.
+
+        Builds an identifier using the client, rule, and a short random suffix.
+        """
         return f"{client_id}:{rule_id}:{uuid.uuid4().hex[:8]}"
 
 
