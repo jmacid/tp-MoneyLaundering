@@ -168,6 +168,10 @@ class PipelineCoordinator:
         )
 
         with self.lock:
+            old_node = self.nodes.get(node_id)
+            if old_node:
+                self.nodes_by_stage[old_node.rule_id][old_node.stage_id].discard(node_id)
+
             self.nodes[node_id] = node
             self.nodes_by_stage[rule_id][stage_id].add(node_id)
 
