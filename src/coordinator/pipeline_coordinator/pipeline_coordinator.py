@@ -23,6 +23,7 @@ REPORT_RETRY_SECONDS = int(os.getenv("REPORT_RETRY_SECONDS", "5"))
 NODE_TIMEOUT_SECONDS = int(os.getenv("NODE_TIMEOUT_SECONDS", "300"))
 MONITOR_INTERVAL_SECONDS = int(os.getenv("MONITOR_INTERVAL_SECONDS", "15"))
 HEARTBEAT_INTERVAL = int(os.getenv("HEARTBEAT_INTERVAL", "180"))
+REPORT_RETRY_SECONDS = int(os.getenv("REPORT_RETRY_MAX", "50"))
 
 class PipelineCoordinator:
 
@@ -411,7 +412,7 @@ class PipelineCoordinator:
 
             if total_processed > request.expected_input:
                 request.status = "ERROR"
-
+                self.abort_client(request)
                 self.store.save(namespace="coordinator.eof_requests", key=request.request_id, value=request.to_dict())
 
                 logging.error(
@@ -617,6 +618,52 @@ class PipelineCoordinator:
 
         logging.info(
             "RELEASE_CLIENT sent | request_id=%s client_id=%s rule_id=%s stage_id=%s nodes=%s",
+            request.request_id,
+            request.client_id,
+            request.rule_id,
+            request.stage_id,
+            sorted(nodes_to_notify),
+        )
+
+    def abort_client(self, request: EofRequest) -> None:
+        """Notify all expected nodes that an EOF round must be aborted.
+
+        Builds and sends an ABORT_CLIENT control message for the given EOF request.
+        The message is sent to every node in the current rule.
+
+        This is used when the coordinator determines that the client/stage cannot
+        be completed safely, for example when processed is greater than expected.
+        """
+        message = {
+            "event": "ABORT_CLIENT",
+            "request_id": request.request_id,
+            "client_id": request.client_id,
+            "rule_id": request.rule_id,
+            "stage_id": request.stage_id,
+        }
+
+        with self.lock:
+            nodes_to_notify = {
+                node_id
+                for node_id in self.nodes_by_stage[request.rule_id].get(request.stage_id, set())
+                if self.nodes[node_id].status == "ACTIVE"
+            }
+
+            messages = []
+
+            for node_id in nodes_to_notify:
+                node = self.nodes.get(node_id)
+
+                if not node:
+                    continue
+
+                messages.append((node.control_queue, message))
+
+        for queue_name, payload in messages:
+            self.publisher.publish(queue_name, payload)
+
+        logging.info(
+            "ABORT_CLIENT sent | request_id=%s client_id=%s rule_id=%s stage_id=%s nodes=%s",
             request.request_id,
             request.client_id,
             request.rule_id,
