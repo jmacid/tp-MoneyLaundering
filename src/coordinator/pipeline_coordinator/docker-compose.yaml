@@ -16,8 +16,8 @@ services:
 
   pipeline_coordinator:
     build:
-      context: ..
-      dockerfile: coordinator/Dockerfile
+      context: ../..
+      dockerfile: coordinator/pipeline_coordinator/Dockerfile
     container_name: pipeline_coordinator
     depends_on:
       rabbitmq:
@@ -29,4 +29,10 @@ services:
       REPORT_RETRY_SECONDS: 5
       NODE_TIMEOUT_SECONDS: 15
       MONITOR_INTERVAL_SECONDS: 2
+      STATE_DB_PATH: /app/data/state.db
+    volumes:
+      - pipeline_coordinator_data:/app/data
     restart: unless-stopped
+
+volumes:
+  pipeline_coordinator_data:
