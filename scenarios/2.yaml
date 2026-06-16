@@ -1,7 +1,7 @@
 services:
   gateway:
     build:
-      context: ./src/
+      context: ../src/
       dockerfile: gateway/Dockerfile
     container_name: gateway
     depends_on:
@@ -11,28 +11,39 @@ services:
     - INPUT_QUEUE=results_queue_2
     - MOM_HOST=rabbitmq
     - OUTPUT_QUEUE=transactions
+    - RESOLVER_EXCHANGE=bank_mapping_exchange
     - PYTHONUNBUFFERED=1
     - SERVER_HOST=gateway
     - SERVER_PORT=5678
     - EOF_CONTROL_QUEUE=eof_control_queue_2
+    - RESPONSE_WORKERS=2
+
   client_1:
     build:
-      context: ./src/
+      context: ../src/
       dockerfile: client/Dockerfile
     container_name: client_1
     depends_on:
       - gateway
     environment:
-    - INPUT_FILE=/datasets/HI-Small_Trans.csv
+    - INPUT_FILE=/datasets/probando.csv
+    - BANK_MAPPING_FILE=/datasets/bank_mapping.csv
     - SERVER_HOST=gateway
     - SERVER_PORT=5678
     - OUTPUT_FILE_MINOR_RESULT=/output/client_1_minor_result.csv
+    - CLIENT_ID=client_1
+    - BATCH_SIZE_BYTES=1024
+    - ACK_TIMEOUT_SECONDS=5.0
+    - MAX_RETRIES=3
+    - MAX_PENDING_BATCHES=10
+    - EXPECTED_EOFS=1
     volumes:
-    - ./datasets:/datasets
-    - ./output:/output
+    - ../datasets:/datasets
+    - ../output:/output
+
   rabbitmq:
     build:
-      context: ./src/rabbitmq
+      context: ../src/rabbitmq
       dockerfile: Dockerfile
     container_name: rabbitmq
     environment:
@@ -46,9 +57,10 @@ services:
     ports:
     - 5672:5672
     - 15672:15672
+
   projection_dispatcher_1:
     build:
-      context: ./src/
+      context: ../src/
       dockerfile: workers/worker/Dockerfile
     container_name: projection_dispatcher_1
     depends_on:
@@ -61,9 +73,10 @@ services:
       - INPUT_QUEUE=transactions
       - OUTPUTS=minor_query,max_query,avg_query,scatter_gather_query,count_query
       - EOF_CONTROL_QUEUE=eof_control_queue_2
+
   currency_filter_1:
     build:
-      context: ./src/
+      context: ../src/
       dockerfile: workers/worker/Dockerfile
     container_name: currency_filter_1
     depends_on:
@@ -78,9 +91,10 @@ services:
       - OUTPUTS=to_bank_dispatcher_queue_2
       - CURRENCY=US Dollar
       - EOF_CONTROL_QUEUE=eof_control_queue_2
+
   bank_dispatcher_1:
     build:
-      context: ./src
+      context: ../src
       dockerfile: workers/worker/Dockerfile
     container_name: bank_dispatcher_1
     depends_on:
@@ -95,12 +109,13 @@ services:
       - OUTPUT_EXCHANGE=bank_shards_2
       - AGGREGATORS_COUNT=2
       - EOF_CONTROL_QUEUE=eof_control_queue_2
-  local_bank_max_aggregator_0:
+
+  local_bank_max_aggregator_1:
     build:
-      context: ./src
+      context: ../src
       dockerfile: workers/worker/Dockerfile
     entrypoint: ["python3", "-m", "operations.aggregators.local_bank_max_aggregator"]
-    container_name: local_bank_max_aggregator_0
+    container_name: local_bank_max_aggregator_1
     depends_on:
       rabbitmq:
         condition: service_healthy
@@ -112,9 +127,10 @@ services:
       - OUTPUT_EXCHANGE=max_bank_transactions
       - DISPATCHERS_AMOUNT=1
       - RESOLVERS_COUNT=1
+
   bank_resolver_1:
     build:
-      context: ./src/
+      context: ../src/
       dockerfile: workers/resolver/Dockerfile
     container_name: bank_resolver_1
     depends_on:
@@ -125,11 +141,13 @@ services:
       - RABBITMQ_HOST=rabbitmq
       - ID=0
       - INPUT_EXCHANGE=max_bank_transactions
+      - RESOLVER_EXCHANGE=bank_mapping_exchange
       - OUTPUT_QUEUE=results_queue_2
       - AGGREGATORS_COUNT=1
+
   eof_tracker:
     build:
-      context: ./src/
+      context: ../src/
       dockerfile: tracker/Dockerfile
     container_name: eof_tracker
     depends_on:
@@ -139,4 +157,4 @@ services:
       - RABBITMQ_HOST=rabbitmq
       - EOF_CONTROL_QUEUE=eof_control_queue_2
       - FINAL_QUEUE=to_bank_dispatcher_queue_2
-      - TOPOLOGY=gateway,projection_dispatcher,currency_filter
+      - TOPOLOGY=gateway,projection_dispatcher,currency_filter,bank_dispatcher

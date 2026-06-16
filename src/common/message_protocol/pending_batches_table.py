@@ -21,7 +21,7 @@ class PendingBatchesTable:
                 sent_at=time.time()
             )
 
-    def ack(self, sequence_number: int):
+    def remove(self, sequence_number: int):
         with self._lock:
             self._pending.pop(sequence_number, None)
 
@@ -32,20 +32,17 @@ class PendingBatchesTable:
     def get_expired(self) -> list[PendingBatch]:
         now = time.time()
         with self._lock:
-            return [
-                p for p in self._pending.values()
-                if now - p.sent_at > ACK_TIMEOUT_SECONDS
-            ]
+            result = []
+            for p in self._pending.values():
+                if now - p.sent_at > ACK_TIMEOUT_SECONDS:
+                    result.append(p) 
+            return result
 
     def increment_retries(self, sequence_number: int):
         with self._lock:
             if sequence_number in self._pending:
                 self._pending[sequence_number].retries += 1
                 self._pending[sequence_number].sent_at = time.time()
-
-    def remove(self, sequence_number: int):
-        with self._lock:
-            self._pending.pop(sequence_number, None)
 
     def is_empty(self) -> bool:
         with self._lock:

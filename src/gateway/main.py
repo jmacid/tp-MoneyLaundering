@@ -3,11 +3,11 @@ import logging
 import socket
 import signal
 import multiprocessing
-import message_handler
 from common import middleware, message_protocol
+from gateway.message_handler import MessageHandler
+from common.message_protocol.transaction_batch import TransactionBatch
 import uuid
 import json
-import csv 
 
 SERVER_HOST = os.environ["SERVER_HOST"]
 SERVER_PORT = int(os.environ["SERVER_PORT"])
@@ -39,10 +39,14 @@ def handle_client_request(client_socket, message_handler):
             logging.info(f"[handle_client_request] Message received type {msg_type}")
             
             if msg_type == message_protocol.external.MsgType.BATCH_RECORD:
-                for line in batch.lines:
-                    serialized_message = message_handler.serialize_data_message(line)
-                    output_queue.send(serialized_message)
-                    transactions_sent += 1
+                transaction_batch = TransactionBatch(
+                    sequence_number=batch.sequence_number,
+                    lines=[message_handler.serialize_data_message(line) for line in batch.lines],
+                    is_last=False,
+                    client_id=message_handler.client_id
+                )
+                output_queue.send(message_protocol.internal.serialize(transaction_batch.to_dict()))
+                transactions_sent += len(transaction_batch.lines)
                 message_protocol.external.send_msg(
                     client_socket,
                     message_protocol.external.MsgType.ACK,
@@ -50,6 +54,7 @@ def handle_client_request(client_socket, message_handler):
                 )
 
             elif msg_type == message_protocol.external.MsgType.BANK_MAPPING:
+                logging.info(f"[handle_client_request] BANK_MAPPING received")
                 _handle_bank_mapping(batch, resolver_exchange)
                 message_protocol.external.send_msg(
                     client_socket,
@@ -89,8 +94,8 @@ def handle_client_response(client_list):
         try:
             fields = message_protocol.internal.deserialize(message)
 
-            if isinstance(fields, list) and len(fields) == 1:
-                target_client_id = fields[0]
+            if fields["is_last"] and not fields["lines"]:
+                target_client_id = fields["client_id"]
                 logging.info(f"Gateway received EOF for client {target_client_id[:8]}. Sending to client...")
 
                 for idx, client_data in enumerate(client_list):
@@ -106,7 +111,8 @@ def handle_client_response(client_list):
                 ack()
                 return
 
-            target_client_id = fields.pop("client_id")
+            tb = message_protocol.internal.deserialize(message)  
+            target_client_id = tb["client_id"]
 
             for client_data in client_list:
                 if client_data[0] == target_client_id:
@@ -114,7 +120,7 @@ def handle_client_response(client_list):
                     message_protocol.external.send_msg(
                         target_socket,
                         message_protocol.external.MsgType.MINOR_RESULT,
-                        fields,
+                        tb["lines"],
                     )
                     break
 
@@ -160,7 +166,7 @@ def main():
 
                         client_id = str(uuid.uuid4())
                         logging.info(f"A new client has connected: {client_id[:8]}")
-                        message_handler_instance = message_handler.MessageHandler(client_id)
+                        message_handler_instance = MessageHandler(client_id)
                         client_list.append([client_id, message_handler_instance, client_socket])
                         processes_pool.apply_async(
                             handle_client_request,

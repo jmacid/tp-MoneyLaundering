@@ -25,7 +25,7 @@ def build_batches(file_path: str, client_id: str):
             # Edge case: one line overcome BATCH_SIZE
             if line_size > BATCH_SIZE_BYTES and not current_lines:
                 logging.warning(f"[build_batches] line overcome BATCH_SIZE ({line_size} bytes), sending equal")
-                logging.info(f"[build_batches] emitiendo batch {sequence_number}")
+                logging.info(f"[build_batches] emitting batch {sequence_number}")
                 yield Batch(
                     sequence_number=sequence_number,
                     lines=[line],
@@ -37,7 +37,7 @@ def build_batches(file_path: str, client_id: str):
 
             # If add this line, overcome BATCH_SIZE_BYTES. Add equal
             if current_size + line_size > BATCH_SIZE_BYTES and current_lines:
-                logging.info(f"[build_batches] emitiendo batch {sequence_number}")
+                logging.info(f"[build_batches] emitting batch {sequence_number}")
                 yield Batch(
                     sequence_number=sequence_number,
                     lines=current_lines,
@@ -53,7 +53,7 @@ def build_batches(file_path: str, client_id: str):
 
         # Sending last batch
         if current_lines:
-            logging.info(f"[build_batches] emitiendo batch {sequence_number}")
+            logging.info(f"[build_batches] emitting last batch {sequence_number}")
             yield Batch(
                 sequence_number=sequence_number,
                 lines=current_lines,

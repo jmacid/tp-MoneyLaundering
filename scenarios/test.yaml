@@ -15,6 +15,7 @@ services:
     - SERVER_HOST=gateway
     - SERVER_PORT=5678
     - EOF_CONTROL_QUEUE=eof_control_queue
+
   client_1:
     build:
       context: ../src/
@@ -37,6 +38,7 @@ services:
     volumes:
       - ../datasets:/datasets
       - ../output:/output
+
   rabbitmq:
     build:
       context: ../src/rabbitmq
@@ -53,6 +55,7 @@ services:
     ports:
     - 5672:5672
     - 15672:15672
+
   projection_dispatcher_1:
     build:
       context: ../src/
@@ -68,6 +71,7 @@ services:
       - INPUT_QUEUE=transactions
       - OUTPUTS=minor_query,max_query,avg_query,scatter_gather_query,count_query
       - EOF_CONTROL_QUEUE=eof_control_queue
+
   currency_filter_1:
     build:
       context: ../src/
@@ -82,44 +86,10 @@ services:
       - INPUT_MIDDLEWARE_TYPE=queue
       - INPUT_QUEUE=minor_query
       - OUTPUT_MIDDLEWARE_TYPE=queue
-      - OUTPUTS=USD_transactions
+      - OUTPUTS=minor_transactions
       - CURRENCY=US Dollar
       - EOF_CONTROL_QUEUE=eof_control_queue
-  date_range_filter_1:
-    build:
-      context: ../src/
-      dockerfile: workers/worker/Dockerfile
-    container_name: date_range_filter_1
-    depends_on:
-      rabbitmq:
-        condition: service_healthy
-    environment:
-      - RABBITMQ_HOST=rabbitmq
-      - OPERATION_TYPE=date_range_filter
-      - INPUT_MIDDLEWARE_TYPE=queue
-      - INPUT_QUEUE=USD_transactions
-      - OUTPUT_MIDDLEWARE_TYPE=queue
-      - OUTPUTS=range_transactions
-      - START_DATE=2022-09-01T00:15:00
-      - END_DATE=2022-09-01T00:30:00
-      - EOF_CONTROL_QUEUE=eof_control_queue
-  amount_filter_1:
-    build:
-      context: ../src/
-      dockerfile: workers/worker/Dockerfile
-    container_name: amount_filter_1
-    depends_on:
-      rabbitmq:
-        condition: service_healthy
-    environment:
-      - RABBITMQ_HOST=rabbitmq
-      - OPERATION_TYPE=amount_filter
-      - INPUT_MIDDLEWARE_TYPE=queue
-      - INPUT_QUEUE=range_transactions
-      - OUTPUT_MIDDLEWARE_TYPE=queue
-      - OUTPUTS=minor_transactions
-      - MINIMUM_AMOUNT=50
-      - EOF_CONTROL_QUEUE=eof_control_queue
+
   eof_tracker:
     build:
       context: ../src/
@@ -130,4 +100,4 @@ services:
         condition: service_healthy
     environment:
       - RABBITMQ_HOST=rabbitmq
-      - TOPOLOGY=gateway,projection_dispatcher,currency_filter,date_range_filter,amount_filter
+      - TOPOLOGY=gateway,projection_dispatcher,currency_filter

@@ -131,7 +131,7 @@ class Client:
 
                 if msg_type == message_protocol.external.MsgType.ACK:
                     sequence_number = msg_payload
-                    pending.ack(sequence_number)
+                    pending.remove(sequence_number)
                     logging.info(f"[_receiver_loop] ACK received for batch {sequence_number}")
 
                 elif msg_type == message_protocol.external.MsgType.ACK_EOF:
@@ -154,13 +154,15 @@ class Client:
     def _save_minor_result(self, msg_payload):
         logging.info(f"result: {msg_payload}")
         file_exists = os.path.isfile(OUTPUT_FILE_MINOR_RESULT)
-
         if self.output_file_minor_result is None:
-            self.output_file_minor_result = open(OUTPUT_FILE_MINOR_RESULT, "a")
+            self.output_file_minor_result = open(OUTPUT_FILE_MINOR_RESULT, "x")
             self.csv_writer = csv.writer(self.output_file_minor_result, delimiter=",", quotechar='"')
-            if not file_exists:
-                self.csv_writer.writerow(msg_payload.keys())
-        self.csv_writer.writerow(msg_payload.values())
+        
+        if not file_exists:
+            self.csv_writer.writerow(msg_payload[0].keys()) 
+        
+        for transaction in msg_payload:
+            self.csv_writer.writerow(transaction.values())
 
 def main() -> int:
     logging.basicConfig(level=logging.INFO)

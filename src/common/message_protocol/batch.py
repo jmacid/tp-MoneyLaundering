@@ -9,3 +9,5 @@ class Batch:
     
 #El identificador único en el sistema es (client_id, sequence_number)
 #Necesito file_id sí en el futuro un cliente puede mandar más de un archivo a la vez
+
+#Se usa en el protocolo externo (cliente → gateway): strings crudos del CSV

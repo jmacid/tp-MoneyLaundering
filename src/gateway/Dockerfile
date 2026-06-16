@@ -1,8 +1,12 @@
 FROM python:3-alpine
 
-RUN pip3 install pika
+WORKDIR /app
 
-COPY common ./common
-COPY gateway .
+COPY requirements.txt .
+RUN pip3 install --no-cache-dir -r requirements.txt pika
 
-ENTRYPOINT ["python3", "main.py"]
+COPY . .
+
+ENV PYTHONPATH=/app
+
+ENTRYPOINT ["python3", "-m", "gateway.main"]
