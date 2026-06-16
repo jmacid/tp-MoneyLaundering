@@ -1,6 +1,7 @@
 from typing import Any
 from workers.dispatchers.queue_dispatcher import QueueDispatcher
 from operations.projectors.field_projector import FieldProjector
+from common.message_protocol.transaction_batch import TransactionBatch
 
 Q_1 = ["client_id", "timestamp", "from_account","to_account","amount_paid", "receiving_currency", "payment_currency"]
 Q_2 = ["client_id", "from_account", "to_bank", "amount_paid", "payment_currency", "receiving_currency"]
@@ -22,12 +23,11 @@ class ProjectionDispatcher():
 
         self.projectors = [projector_q1, projector_q2, projector_q3, projector_q4, projector_q5]
 
-    def process(self, transaction: dict[str, Any]) -> None:
+    def process(self, batch: TransactionBatch) -> None:
 
-        projected_transactions: list[dict[str, Any]] = []
+        batch_per_queue = [[] for _ in self.projectors]
 
-        for projector in self.projectors:
-            projected_transaction = projector.process(transaction)
-            projected_transactions.append(projected_transaction)
-
-        self.dispatcher.process(projected_transactions)
+        for transaction in batch.lines:
+            for i, projector in enumerate(self.projectors):
+                batch_per_queue[i].append(projector.process(transaction))
+        self.dispatcher.process(batch_per_queue, batch)

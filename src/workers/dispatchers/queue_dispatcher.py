@@ -3,6 +3,8 @@ import os
 from typing import Any
 
 from common import middleware
+from common.message_protocol.transaction_batch import TransactionBatch
+from common.message_protocol.internal import serialize
 
 
 class QueueDispatcher:
@@ -29,12 +31,7 @@ class QueueDispatcher:
             for queue in self.output_queues
         }
 
-    def process(self, transactions: list[dict[str, Any]]) -> None:
-        if len(transactions) != self.expected_transactions:
-            raise ValueError(
-                "Unexpected amount of transactions in QueueDispatcher",
-                f"transactions={len(transactions)} and expected={self.expected_transactions}"
-            )
-
-        for queue, transaction in zip(self.output_queues, transactions):
-            self.middlewares[queue].send(json.dumps(transaction))
+    def process(self, batch_per_queue: list[list[dict]], original: TransactionBatch) -> None:
+        for queue, lines in zip(self.output_queues, batch_per_queue):
+            tb = TransactionBatch(original.sequence_number, lines, original.is_last, original.client_id)
+            self.middlewares[queue].send(serialize(tb))
