@@ -8,6 +8,7 @@ class MsgType:
     ACK = 3
     END_OF_RECODS = 4
     MINOR_RESULT = 5
+    MAX_PER_BANK = 6
 
 
 def _recv_sized(socket, size):
@@ -68,12 +69,17 @@ def _recv_empty(socket):
     return None
 
 
+def _recv_max_per_bank(socket):
+    return json.loads(_recv_string(socket))
+
+
 RECV_MSG_HANDLERS = {
     MsgType.TRANSACTION_RECORD: _recv_transaction_record,
     # MsgType.TRANSACTION_TOP: _recv_transaction_top,
     MsgType.ACK: _recv_empty,
     MsgType.END_OF_RECODS: _recv_empty,
     MsgType.MINOR_RESULT: _recv_minor_result,
+    MsgType.MAX_PER_BANK: _recv_max_per_bank,
 }
 
 
@@ -133,12 +139,19 @@ def _send_end_of_records(socket):
     socket.sendall(external_serializer.serialize_uint32(MsgType.END_OF_RECODS))
 
 
+def _send_max_per_bank(socket, result_dict):
+    msg = external_serializer.serialize_uint32(MsgType.MAX_PER_BANK)
+    msg += _serialize_string(json.dumps(result_dict))
+    socket.sendall(msg)
+
+
 SEND_MSG_HANDLERS = {
     MsgType.TRANSACTION_RECORD: _send_transaction_record,
     # MsgType.TRANSACTION_TOP: _send_transaction_top,
     MsgType.ACK: _send_ack,
     MsgType.END_OF_RECODS: _send_end_of_records,
     MsgType.MINOR_RESULT: _send_minor_result,
+    MsgType.MAX_PER_BANK: _send_max_per_bank,
 }
 
 

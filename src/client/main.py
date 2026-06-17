@@ -10,8 +10,9 @@ SERVER_HOST = os.environ["SERVER_HOST"]
 SERVER_PORT = int(os.environ["SERVER_PORT"])
 INPUT_FILE = os.environ["INPUT_FILE"]
 OUTPUT_FILE_MINOR_RESULT = os.environ["OUTPUT_FILE_MINOR_RESULT"]
+OUTPUT_FILE_MAX_PER_BANK = os.environ.get("OUTPUT_FILE_MAX_PER_BANK", "/output/max_per_bank.csv")
 
-ROW_LIMIT = 7500 #None
+ROW_LIMIT = 500 #None
 
 class Client:
     def __init__(self):
@@ -19,6 +20,8 @@ class Client:
         self._prev_sigterm_handler = signal.signal(signal.SIGTERM, self.handle_sigterm)
         self.output_file_minor_result = None
         self.csv_writer = None
+        self.output_file_max_per_bank = None
+        self.csv_writer_max_per_bank = None
 
     def handle_sigterm(self, signum, frame):
         logging.info("[client] Recieved SIGTERM signal")
@@ -37,6 +40,8 @@ class Client:
             self.server_socket.shutdown(socket.SHUT_RDWR)
         if self.output_file_minor_result:
             self.output_file_minor_result.close()
+        if self.output_file_max_per_bank:
+            self.output_file_max_per_bank.close()
     
     def send_transaction_records(self, input_file):
         logging.info("[send_transaction_records] Sending transaction records")
@@ -57,6 +62,8 @@ class Client:
                         break
                     elif msg_type == message_protocol.external.MsgType.MINOR_RESULT:
                         self._save_minor_result(msg_payload)
+                    elif msg_type == message_protocol.external.MsgType.MAX_PER_BANK:
+                        self._save_max_per_bank(msg_payload)
 
         logging.info("[send_transaction_records]: Enviando END_OF_RECODS")
         message_protocol.external.send_msg(
@@ -69,6 +76,8 @@ class Client:
                 break
             elif msg_type == message_protocol.external.MsgType.MINOR_RESULT:
                 self._save_minor_result(msg_payload)
+            elif msg_type == message_protocol.external.MsgType.MAX_PER_BANK:
+                self._save_max_per_bank(msg_payload)
 
     def receive_results(self):
         logging.info("[receive_results] Waiting for processed results....")
@@ -77,6 +86,8 @@ class Client:
 
             if msg_type == message_protocol.external.MsgType.MINOR_RESULT:
                 self._save_minor_result(msg_payload)
+            elif msg_type == message_protocol.external.MsgType.MAX_PER_BANK:
+                self._save_max_per_bank(msg_payload)
             elif msg_type == message_protocol.external.MsgType.END_OF_RECODS:
                 logging.info("All results received. Processing finished successfully.")
                 break
@@ -91,6 +102,22 @@ class Client:
             if not file_exists:
                 self.csv_writer.writerow(msg_payload.keys())
         self.csv_writer.writerow(msg_payload.values())
+
+    def _save_max_per_bank(self, msg_payload):
+        logging.info(f"result: {msg_payload}")
+        results = msg_payload.get("results", [])
+        if not results:
+            return
+
+        if self.output_file_max_per_bank is None:
+            file_exists = os.path.isfile(OUTPUT_FILE_MAX_PER_BANK)
+            self.output_file_max_per_bank = open(OUTPUT_FILE_MAX_PER_BANK, "a")
+            self.csv_writer_max_per_bank = csv.writer(self.output_file_max_per_bank, delimiter=",", quotechar='"')
+            if not file_exists:
+                self.csv_writer_max_per_bank.writerow(results[0].keys())
+
+        for row in results:
+            self.csv_writer_max_per_bank.writerow(row.values())
 
 
 def main() -> int:

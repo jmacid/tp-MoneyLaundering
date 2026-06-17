@@ -125,12 +125,17 @@ def handle_client_response(client_list):
 
             target_client_id = fields.pop("client_id")
 
+            if "query" in fields and fields["query"] == "query_2":
+                msg_type = message_protocol.external.MsgType.MAX_PER_BANK
+            else:
+                msg_type = message_protocol.external.MsgType.MINOR_RESULT
+
             for client_data in client_list:
                 if client_data[0] == target_client_id:
                     target_socket = client_data[2]
                     message_protocol.external.send_msg(
                         target_socket,
-                        message_protocol.external.MsgType.MINOR_RESULT,
+                        msg_type,
                         fields,
                     )
                     break
