@@ -8,13 +8,13 @@ services:
       rabbitmq:
         condition: service_healthy
     environment:
-    - INPUT_QUEUE=results_queue_2
+    - INPUT_QUEUE=scatter_gather_accounts_4
     - MOM_HOST=rabbitmq
     - OUTPUT_QUEUE=transactions
     - PYTHONUNBUFFERED=1
     - SERVER_HOST=gateway
     - SERVER_PORT=5678
-    - EOF_CONTROL_QUEUE=eof_control_queue_2
+    - EOF_CONTROL_QUEUE=eof_control_queue_4
   client_1:
     build:
       context: ./src/
@@ -24,10 +24,11 @@ services:
       - gateway
     environment:
     - INPUT_FILE=/datasets/HI-Small_Trans.csv
+    # - INPUT_FILE=/datasets/sc.csv
     - SERVER_HOST=gateway
     - SERVER_PORT=5678
     - OUTPUT_FILE_MINOR_RESULT=/output/client_1_minor_result.csv
-    - OUTPUT_FILE_MAX_PER_BANK=/output/client_1_max_per_bank.csv
+    - OUTPUT_FILE_SCATTER_GATHER=/output/client_1_scatter_gather.csv
     volumes:
     - ./datasets:/datasets
     - ./output:/output
@@ -61,7 +62,22 @@ services:
       - INPUT_MIDDLEWARE_TYPE=queue
       - INPUT_QUEUE=transactions
       - OUTPUTS=minor_query,max_query,avg_query,scatter_gather_query,count_query
-      - EOF_CONTROL_QUEUE=eof_control_queue_2
+      - EOF_CONTROL_QUEUE=eof_control_queue_4
+  projection_dispatcher_2:
+    build:
+      context: ./src/
+      dockerfile: workers/worker/Dockerfile
+    container_name: projection_dispatcher_2
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    environment:
+      - RABBITMQ_HOST=rabbitmq
+      - OPERATION_TYPE=projection_dispatcher
+      - INPUT_MIDDLEWARE_TYPE=queue
+      - INPUT_QUEUE=transactions
+      - OUTPUTS=minor_query,max_query,avg_query,scatter_gather_query,count_query
+      - EOF_CONTROL_QUEUE=eof_control_queue_4
   currency_filter_1:
     build:
       context: ./src/
@@ -74,60 +90,118 @@ services:
       - RABBITMQ_HOST=rabbitmq
       - OPERATION_TYPE=currency_filter
       - INPUT_MIDDLEWARE_TYPE=queue
-      - INPUT_QUEUE=max_query
+      - INPUT_QUEUE=minor_query
       - OUTPUT_MIDDLEWARE_TYPE=queue
-      - OUTPUTS=to_bank_dispatcher_queue_2
+      - OUTPUTS=USD_transactions_4
       - CURRENCY=US Dollar
-      - EOF_CONTROL_QUEUE=eof_control_queue_2
-  bank_dispatcher_1:
-    build:
-      context: ./src
-      dockerfile: workers/worker/Dockerfile
-    container_name: bank_dispatcher_1
-    depends_on:
-      rabbitmq:
-        condition: service_healthy
-    environment:
-      - RABBITMQ_HOST=rabbitmq
-      - OPERATION_TYPE=bank_dispatcher
-      - OUTPUT_MIDDLEWARE_TYPE=none
-      - INPUT_MIDDLEWARE_TYPE=queue
-      - INPUT_QUEUE=to_bank_dispatcher_queue_2
-      - OUTPUT_EXCHANGE=bank_shards_2
-      - AGGREGATORS_COUNT=2
-      - EOF_CONTROL_QUEUE=eof_control_queue_2
-  local_bank_max_aggregator_0:
-    build:
-      context: ./src
-      dockerfile: workers/worker/Dockerfile
-    entrypoint: ["python3", "-m", "operations.aggregators.local_bank_max_aggregator"]
-    container_name: local_bank_max_aggregator_0
-    depends_on:
-      rabbitmq:
-        condition: service_healthy
-    environment:
-      - PYTHONUNBUFFERED=1
-      - RABBITMQ_HOST=rabbitmq
-      - ID=0
-      - INPUT_EXCHANGE=bank_shards_2
-      - OUTPUT_EXCHANGE=max_bank_transactions
-      - DISPATCHERS_AMOUNT=1
-      - RESOLVERS_COUNT=1
-  bank_resolver_1:
+      - EOF_CONTROL_QUEUE=eof_control_queue_4
+  currency_filter_2:
     build:
       context: ./src/
-      dockerfile: workers/resolver/Dockerfile
-    container_name: bank_resolver_1
+      dockerfile: workers/worker/Dockerfile
+    container_name: currency_filter_2
     depends_on:
       rabbitmq:
         condition: service_healthy
     environment:
-      - PYTHONUNBUFFERED=1
       - RABBITMQ_HOST=rabbitmq
-      - ID=0
-      - INPUT_EXCHANGE=max_bank_transactions
-      - OUTPUT_QUEUE=results_queue_2
-      - AGGREGATORS_COUNT=1
+      - OPERATION_TYPE=currency_filter
+      - INPUT_MIDDLEWARE_TYPE=queue
+      - INPUT_QUEUE=minor_query
+      - OUTPUT_MIDDLEWARE_TYPE=queue
+      - OUTPUTS=USD_transactions_4
+      - CURRENCY=US Dollar
+      - EOF_CONTROL_QUEUE=eof_control_queue_4
+  date_range_filter_1:
+    build:
+      context: ./src/
+      dockerfile: workers/worker/Dockerfile
+    container_name: date_range_filter_1
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    environment:
+      - RABBITMQ_HOST=rabbitmq
+      - OPERATION_TYPE=date_range_filter
+      - INPUT_MIDDLEWARE_TYPE=queue
+      - INPUT_QUEUE=USD_transactions_4
+      - OUTPUT_MIDDLEWARE_TYPE=sharding_exchange
+      - OUTPUT_EXCHANGE=account_shards_4
+      - SHARDS_COUNT=2
+      - SHARDING_KEY_FIELD=from_account
+      - START_DATE=2022-09-01T00:15:00
+      - END_DATE=2022-09-01T00:30:00
+      - EOF_CONTROL_QUEUE=eof_control_queue_4
+  date_range_filter_2:
+    build:
+      context: ./src/
+      dockerfile: workers/worker/Dockerfile
+    container_name: date_range_filter_2
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    environment:
+      - RABBITMQ_HOST=rabbitmq
+      - OPERATION_TYPE=date_range_filter
+      - INPUT_MIDDLEWARE_TYPE=queue
+      - INPUT_QUEUE=USD_transactions_4
+      - OUTPUT_MIDDLEWARE_TYPE=sharding_exchange
+      - OUTPUT_EXCHANGE=account_shards_4
+      - SHARDS_COUNT=2
+      - SHARDING_KEY_FIELD=from_account
+      - START_DATE=2022-09-01T00:15:00
+      - END_DATE=2022-09-01T00:30:00
+      - EOF_CONTROL_QUEUE=eof_control_queue_4
+  destination_filter_1:
+    build:
+      context: ./src/
+      dockerfile: workers/worker/Dockerfile
+    container_name: destination_filter_1
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    environment:
+      - RABBITMQ_HOST=rabbitmq
+      - OPERATION_TYPE=destination_filter
+      - INPUT_MIDDLEWARE_TYPE=exchange
+      - INPUT_EXCHANGE=account_shards_4
+      - INPUT_ROUTING_KEYS=account_shards_4_0
+      - OUTPUT_MIDDLEWARE_TYPE=queue
+      - OUTPUTS=bridge_account_shards_4
+      - DESTINATION_ACC_REQUIRED=3
+      - EOF_CONTROL_QUEUE=eof_control_queue_4
+  destination_filter_2:
+    build:
+      context: ./src/
+      dockerfile: workers/worker/Dockerfile
+    container_name: destination_filter_2
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    environment:
+      - RABBITMQ_HOST=rabbitmq
+      - OPERATION_TYPE=destination_filter
+      - INPUT_MIDDLEWARE_TYPE=exchange
+      - INPUT_EXCHANGE=account_shards_4
+      - INPUT_ROUTING_KEYS=account_shards_4_1
+      - OUTPUT_MIDDLEWARE_TYPE=queue
+      - OUTPUTS=bridge_account_shards_4
+      - DESTINATION_ACC_REQUIRED=3
+      - EOF_CONTROL_QUEUE=eof_control_queue_4
+  scatter_gather_detector_1:
+    build:
+      context: ./src/
+      dockerfile: operations/scatter_gather/Dockerfile
+    container_name: scatter_gather_detector_1
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    environment:
+      - RABBITMQ_HOST=rabbitmq
+      - OPERATION_TYPE=scatter_gather_detector
+      - INPUT_QUEUE=bridge_account_shards_4
+      - OUTPUT_QUEUE=scatter_gather_accounts_4
+      - EOF_CONTROL_QUEUE=eof_control_queue_4
   eof_tracker:
     build:
       context: ./src/
@@ -138,6 +212,6 @@ services:
         condition: service_healthy
     environment:
       - RABBITMQ_HOST=rabbitmq
-      - EOF_CONTROL_QUEUE=eof_control_queue_2
-      - FINAL_QUEUE=to_bank_dispatcher_queue_2
-      - TOPOLOGY=gateway,projection_dispatcher,currency_filter
+      - EOF_CONTROL_QUEUE=eof_control_queue_4
+      - FINAL_QUEUE=bridge_account_shards_4
+      - TOPOLOGY=gateway,projection_dispatcher,currency_filter,date_range_filter,destination_filter

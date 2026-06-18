@@ -37,6 +37,7 @@ class ThresholdEvaluator:
                 amount = float(tx.get("amount_paid", 0))
 
                 if amount < (avg_value / 100):
+                    tx["query"] = "query_3"
                     self.output_queue.send(message_protocol.internal.serialize(tx))
 
             logging.info(f"Evaluación terminada para {client_id[:8]}. Enviando EOF a Gateway.")

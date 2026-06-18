@@ -11,8 +11,10 @@ SERVER_PORT = int(os.environ["SERVER_PORT"])
 INPUT_FILE = os.environ["INPUT_FILE"]
 OUTPUT_FILE_MINOR_RESULT = os.environ["OUTPUT_FILE_MINOR_RESULT"]
 OUTPUT_FILE_MAX_PER_BANK = os.environ.get("OUTPUT_FILE_MAX_PER_BANK", "/output/max_per_bank.csv")
+OUTPUT_FILE_LOWER_THAN_AVG = os.environ.get("OUTPUT_FILE_LOWER_THAN_AVG", "/output/lower_than_avg.csv")
+OUTPUT_FILE_SCATTER_GATHER = os.environ.get("OUTPUT_FILE_SCATTER_GATHER", "/output/scatter_gather.csv")
 
-ROW_LIMIT = 500 #None
+ROW_LIMIT = 7500 #None
 
 class Client:
     def __init__(self):
@@ -22,6 +24,10 @@ class Client:
         self.csv_writer = None
         self.output_file_max_per_bank = None
         self.csv_writer_max_per_bank = None
+        self.output_file_lower_than_avg = None
+        self.csv_writer_lower_than_avg = None
+        self.output_file_scatter_gather = None
+        self.csv_writer_scatter_gather = None
 
     def handle_sigterm(self, signum, frame):
         logging.info("[client] Recieved SIGTERM signal")
@@ -42,6 +48,10 @@ class Client:
             self.output_file_minor_result.close()
         if self.output_file_max_per_bank:
             self.output_file_max_per_bank.close()
+        if self.output_file_lower_than_avg:
+            self.output_file_lower_than_avg.close()
+        if self.output_file_scatter_gather:
+            self.output_file_scatter_gather.close()
     
     def send_transaction_records(self, input_file):
         logging.info("[send_transaction_records] Sending transaction records")
@@ -64,6 +74,10 @@ class Client:
                         self._save_minor_result(msg_payload)
                     elif msg_type == message_protocol.external.MsgType.MAX_PER_BANK:
                         self._save_max_per_bank(msg_payload)
+                    elif msg_type == message_protocol.external.MsgType.LOWER_THAN_AVG:
+                        self._save_lower_than_avg(msg_payload)
+                    elif msg_type == message_protocol.external.MsgType.SCATTER_GATHER_ACCOUNTS:
+                        self._save_scatter_gather(msg_payload)
 
         logging.info("[send_transaction_records]: Enviando END_OF_RECODS")
         message_protocol.external.send_msg(
@@ -78,6 +92,10 @@ class Client:
                 self._save_minor_result(msg_payload)
             elif msg_type == message_protocol.external.MsgType.MAX_PER_BANK:
                 self._save_max_per_bank(msg_payload)
+            elif msg_type == message_protocol.external.MsgType.LOWER_THAN_AVG:
+                self._save_lower_than_avg(msg_payload)
+            elif msg_type == message_protocol.external.MsgType.SCATTER_GATHER_ACCOUNTS:
+                self._save_scatter_gather(msg_payload)
 
     def receive_results(self):
         logging.info("[receive_results] Waiting for processed results....")
@@ -88,6 +106,10 @@ class Client:
                 self._save_minor_result(msg_payload)
             elif msg_type == message_protocol.external.MsgType.MAX_PER_BANK:
                 self._save_max_per_bank(msg_payload)
+            elif msg_type == message_protocol.external.MsgType.LOWER_THAN_AVG:
+                self._save_lower_than_avg(msg_payload)
+            elif msg_type == message_protocol.external.MsgType.SCATTER_GATHER_ACCOUNTS:
+                self._save_scatter_gather(msg_payload)
             elif msg_type == message_protocol.external.MsgType.END_OF_RECODS:
                 logging.info("All results received. Processing finished successfully.")
                 break
@@ -118,6 +140,37 @@ class Client:
 
         for row in results:
             self.csv_writer_max_per_bank.writerow(row.values())
+
+    def _save_lower_than_avg(self, msg_payload):
+        logging.info(f"result: {msg_payload}")
+        file_exists = os.path.isfile(OUTPUT_FILE_LOWER_THAN_AVG)
+
+        if self.output_file_lower_than_avg is None:
+            self.output_file_lower_than_avg = open(OUTPUT_FILE_LOWER_THAN_AVG, "a")
+            self.csv_writer_lower_than_avg = csv.writer(self.output_file_lower_than_avg, delimiter=",", quotechar='"')
+            if not file_exists:
+                self.csv_writer_lower_than_avg.writerow(msg_payload.keys())
+        self.csv_writer_lower_than_avg.writerow(msg_payload.values())
+
+    def _save_scatter_gather(self, msg_payload):
+        logging.info(f"result: {msg_payload}")
+        paths = msg_payload.get("scatter_gather_paths", [])
+        if not paths:
+            return
+
+        if self.output_file_scatter_gather is None:
+            file_exists = os.path.isfile(OUTPUT_FILE_SCATTER_GATHER)
+            self.output_file_scatter_gather = open(OUTPUT_FILE_SCATTER_GATHER, "a")
+            self.csv_writer_scatter_gather = csv.writer(self.output_file_scatter_gather, delimiter=",", quotechar='"')
+            if not file_exists:
+                self.csv_writer_scatter_gather.writerow(["bridge_account", "origins", "destinations"])
+
+        for path in paths:
+            self.csv_writer_scatter_gather.writerow([
+                path["bridge_account"],
+                ";".join(path["origins"]),
+                ";".join(path["destinations"]),
+            ])
 
 
 def main() -> int:

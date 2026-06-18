@@ -127,6 +127,13 @@ def handle_client_response(client_list):
 
             if "query" in fields and fields["query"] == "query_2":
                 msg_type = message_protocol.external.MsgType.MAX_PER_BANK
+                fields.pop("query")
+            elif "query" in fields and fields["query"] == "query_3":
+                msg_type = message_protocol.external.MsgType.LOWER_THAN_AVG
+                fields.pop("query")
+            elif "query" in fields and fields["query"] == "query_4":
+                msg_type = message_protocol.external.MsgType.SCATTER_GATHER_ACCOUNTS
+                fields.pop("query")
             else:
                 msg_type = message_protocol.external.MsgType.MINOR_RESULT
 

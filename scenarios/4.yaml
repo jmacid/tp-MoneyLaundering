@@ -28,6 +28,7 @@ services:
     - SERVER_HOST=gateway
     - SERVER_PORT=5678
     - OUTPUT_FILE_MINOR_RESULT=/output/client_1_minor_result.csv
+    - OUTPUT_FILE_SCATTER_GATHER=/output/client_1_scatter_gather.csv
     volumes:
     - ./datasets:/datasets
     - ./output:/output
