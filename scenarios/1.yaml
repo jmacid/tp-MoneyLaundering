@@ -15,36 +15,36 @@ services:
     - SERVER_HOST=gateway
     - SERVER_PORT=5678
     - EOF_CONTROL_QUEUE=eof_control_queue
-  client_1:
-    build:
-      context: ./src/
-      dockerfile: client/Dockerfile
-    container_name: client_1
-    depends_on:
-      - gateway
-    environment:
-    - INPUT_FILE=/datasets/HI-Small_Trans.csv
-    - SERVER_HOST=gateway
-    - SERVER_PORT=5678
-    - OUTPUT_FILE_MINOR_RESULT=/output/client_1_minor_result.csv
-    volumes:
-    - ./datasets:/datasets
-    - ./output:/output
-  client_2:
-    build:
-      context: ./src/
-      dockerfile: client/Dockerfile
-    container_name: client_2
-    depends_on:
-      - gateway
-    environment:
-    - INPUT_FILE=/datasets/HI-Small_Trans.csv
-    - SERVER_HOST=gateway
-    - SERVER_PORT=5678
-    - OUTPUT_FILE_MINOR_RESULT=/output/client_2_minor_result.csv
-    volumes:
-    - ./datasets:/datasets
-    - ./output:/output
+  # client_1:
+  #   build:
+  #     context: ./src/
+  #     dockerfile: client/Dockerfile
+  #   container_name: client_1
+  #   depends_on:
+  #     - gateway
+  #   environment:
+  #   - INPUT_FILE=/datasets/HI-Small_Trans.csv
+  #   - SERVER_HOST=gateway
+  #   - SERVER_PORT=5678
+  #   - OUTPUT_FILE_MINOR_RESULT=/output/client_1_minor_result.csv
+  #   volumes:
+  #   - ./datasets:/datasets
+  #   - ./output:/output
+  # client_2:
+  #   build:
+  #     context: ./src/
+  #     dockerfile: client/Dockerfile
+  #   container_name: client_2
+  #   depends_on:
+  #     - gateway
+  #   environment:
+  #   - INPUT_FILE=/datasets/HI-Small_Trans.csv
+  #   - SERVER_HOST=gateway
+  #   - SERVER_PORT=5678
+  #   - OUTPUT_FILE_MINOR_RESULT=/output/client_2_minor_result.csv
+  #   volumes:
+  #   - ./datasets:/datasets
+  #   - ./output:/output
   rabbitmq:
     build:
       context: ./src/rabbitmq
@@ -273,3 +273,7 @@ services:
     environment:
       - RABBITMQ_HOST=rabbitmq
       - TOPOLOGY=gateway,projection_dispatcher,currency_filter,date_range_filter,amount_filter
+
+networks:
+  default:
+    name: money_laundering_net
