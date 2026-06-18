@@ -162,14 +162,15 @@ class Client:
 
     def _save_minor_result(self, msg_payload):
         logging.info(f"result: {msg_payload}")
-        file_exists = os.path.isfile(OUTPUT_FILE_MINOR_RESULT)
+        
+        is_new_file = not os.path.isfile(OUTPUT_FILE_MINOR_RESULT)
         
         if self.output_file_minor_result is None:
             self.output_file_minor_result = open(OUTPUT_FILE_MINOR_RESULT, "a", newline="")
             self.csv_writer = csv.writer(self.output_file_minor_result, delimiter=",", quotechar='"')
         
-        if os.stat(OUTPUT_FILE_MINOR_RESULT).st_size == 0:
-            self.csv_writer.writerow(msg_payload[0].keys()) 
+        if is_new_file:
+            self.csv_writer.writerow(msg_payload[0].keys())
         
         for transaction in msg_payload:
             self.csv_writer.writerow(transaction.values())

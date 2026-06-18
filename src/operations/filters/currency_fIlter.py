@@ -17,8 +17,6 @@ class CurrencyFilter(OperationStrategy):
 
     def process(self, batch: TransactionBatch) -> TransactionBatch | None:
 
-        logging.info(f"DEBUG FILTRO - Buscando: {self.currency} | Datos: {batch.lines[0] if batch.lines else 'Vacío'}")
-
         filtered = [
             t for t in batch.lines
             if t["payment_currency"] == self.currency or
