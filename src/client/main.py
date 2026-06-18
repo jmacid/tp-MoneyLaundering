@@ -13,6 +13,7 @@ OUTPUT_FILE_MINOR_RESULT = os.environ["OUTPUT_FILE_MINOR_RESULT"]
 OUTPUT_FILE_MAX_PER_BANK = os.environ.get("OUTPUT_FILE_MAX_PER_BANK", "/output/max_per_bank.csv")
 OUTPUT_FILE_LOWER_THAN_AVG = os.environ.get("OUTPUT_FILE_LOWER_THAN_AVG", "/output/lower_than_avg.csv")
 OUTPUT_FILE_SCATTER_GATHER = os.environ.get("OUTPUT_FILE_SCATTER_GATHER", "/output/scatter_gather.csv")
+OUTPUT_FILE_AMOUNT_ACCOUNTS = os.environ.get("OUTPUT_FILE_AMOUNT_ACCOUNTS", "/output/amount_accounts.csv")
 
 ROW_LIMIT = 7500 #None
 
@@ -28,6 +29,8 @@ class Client:
         self.csv_writer_lower_than_avg = None
         self.output_file_scatter_gather = None
         self.csv_writer_scatter_gather = None
+        self.output_file_amount_accounts = None
+        self.csv_writer_amount_accounts = None
 
     def handle_sigterm(self, signum, frame):
         logging.info("[client] Recieved SIGTERM signal")
@@ -42,8 +45,11 @@ class Client:
         self.server_socket.connect((server_host, server_port))
 
     def disconnect(self):
-        if self.server_socket:
-            self.server_socket.shutdown(socket.SHUT_RDWR)
+        try:
+            if self.server_socket:
+                self.server_socket.shutdown(socket.SHUT_RDWR)
+        except OSError:
+            pass
         if self.output_file_minor_result:
             self.output_file_minor_result.close()
         if self.output_file_max_per_bank:
@@ -52,6 +58,8 @@ class Client:
             self.output_file_lower_than_avg.close()
         if self.output_file_scatter_gather:
             self.output_file_scatter_gather.close()
+        if self.output_file_amount_accounts:
+            self.output_file_amount_accounts.close()
     
     def send_transaction_records(self, input_file):
         logging.info("[send_transaction_records] Sending transaction records")
@@ -78,6 +86,8 @@ class Client:
                         self._save_lower_than_avg(msg_payload)
                     elif msg_type == message_protocol.external.MsgType.SCATTER_GATHER_ACCOUNTS:
                         self._save_scatter_gather(msg_payload)
+                    elif msg_type == message_protocol.external.MsgType.AMOUNT_ACCOUNTS:
+                        self._save_amount_accounts(msg_payload)
 
         logging.info("[send_transaction_records]: Enviando END_OF_RECODS")
         message_protocol.external.send_msg(
@@ -96,6 +106,8 @@ class Client:
                 self._save_lower_than_avg(msg_payload)
             elif msg_type == message_protocol.external.MsgType.SCATTER_GATHER_ACCOUNTS:
                 self._save_scatter_gather(msg_payload)
+            elif msg_type == message_protocol.external.MsgType.AMOUNT_ACCOUNTS:
+                self._save_amount_accounts(msg_payload)
 
     def receive_results(self):
         logging.info("[receive_results] Waiting for processed results....")
@@ -110,6 +122,8 @@ class Client:
                 self._save_lower_than_avg(msg_payload)
             elif msg_type == message_protocol.external.MsgType.SCATTER_GATHER_ACCOUNTS:
                 self._save_scatter_gather(msg_payload)
+            elif msg_type == message_protocol.external.MsgType.AMOUNT_ACCOUNTS:
+                self._save_amount_accounts(msg_payload)
             elif msg_type == message_protocol.external.MsgType.END_OF_RECODS:
                 logging.info("All results received. Processing finished successfully.")
                 break
@@ -119,7 +133,7 @@ class Client:
         file_exists = os.path.isfile(OUTPUT_FILE_MINOR_RESULT)
 
         if self.output_file_minor_result is None:
-            self.output_file_minor_result = open(OUTPUT_FILE_MINOR_RESULT, "a")
+            self.output_file_minor_result = open(OUTPUT_FILE_MINOR_RESULT, "a", buffering=1)
             self.csv_writer = csv.writer(self.output_file_minor_result, delimiter=",", quotechar='"')
             if not file_exists:
                 self.csv_writer.writerow(msg_payload.keys())
@@ -133,7 +147,7 @@ class Client:
 
         if self.output_file_max_per_bank is None:
             file_exists = os.path.isfile(OUTPUT_FILE_MAX_PER_BANK)
-            self.output_file_max_per_bank = open(OUTPUT_FILE_MAX_PER_BANK, "a")
+            self.output_file_max_per_bank = open(OUTPUT_FILE_MAX_PER_BANK, "a", buffering=1)
             self.csv_writer_max_per_bank = csv.writer(self.output_file_max_per_bank, delimiter=",", quotechar='"')
             if not file_exists:
                 self.csv_writer_max_per_bank.writerow(results[0].keys())
@@ -146,7 +160,7 @@ class Client:
         file_exists = os.path.isfile(OUTPUT_FILE_LOWER_THAN_AVG)
 
         if self.output_file_lower_than_avg is None:
-            self.output_file_lower_than_avg = open(OUTPUT_FILE_LOWER_THAN_AVG, "a")
+            self.output_file_lower_than_avg = open(OUTPUT_FILE_LOWER_THAN_AVG, "a", buffering=1)
             self.csv_writer_lower_than_avg = csv.writer(self.output_file_lower_than_avg, delimiter=",", quotechar='"')
             if not file_exists:
                 self.csv_writer_lower_than_avg.writerow(msg_payload.keys())
@@ -160,7 +174,7 @@ class Client:
 
         if self.output_file_scatter_gather is None:
             file_exists = os.path.isfile(OUTPUT_FILE_SCATTER_GATHER)
-            self.output_file_scatter_gather = open(OUTPUT_FILE_SCATTER_GATHER, "a")
+            self.output_file_scatter_gather = open(OUTPUT_FILE_SCATTER_GATHER, "a", buffering=1)
             self.csv_writer_scatter_gather = csv.writer(self.output_file_scatter_gather, delimiter=",", quotechar='"')
             if not file_exists:
                 self.csv_writer_scatter_gather.writerow(["bridge_account", "origins", "destinations"])
@@ -171,6 +185,22 @@ class Client:
                 ";".join(path["origins"]),
                 ";".join(path["destinations"]),
             ])
+
+    def _save_amount_accounts(self, msg_payload):
+        logging.info(f"result: {msg_payload}")
+        counts = msg_payload.get("counts", {})
+        if not counts:
+            return
+
+        if self.output_file_amount_accounts is None:
+            file_exists = os.path.isfile(OUTPUT_FILE_AMOUNT_ACCOUNTS)
+            self.output_file_amount_accounts = open(OUTPUT_FILE_AMOUNT_ACCOUNTS, "a", buffering=1)
+            self.csv_writer_amount_accounts = csv.writer(self.output_file_amount_accounts, delimiter=",", quotechar='"')
+            if not file_exists:
+                self.csv_writer_amount_accounts.writerow(["payment_method", "count"])
+
+        for payment_method, count in counts.items():
+            self.csv_writer_amount_accounts.writerow([payment_method, count])
 
 
 def main() -> int:

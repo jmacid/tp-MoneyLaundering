@@ -134,6 +134,9 @@ def handle_client_response(client_list):
             elif "query" in fields and fields["query"] == "query_4":
                 msg_type = message_protocol.external.MsgType.SCATTER_GATHER_ACCOUNTS
                 fields.pop("query")
+            elif "query" in fields and fields["query"] == "query_5":
+                msg_type = message_protocol.external.MsgType.AMOUNT_ACCOUNTS
+                fields.pop("query")
             else:
                 msg_type = message_protocol.external.MsgType.MINOR_RESULT
 

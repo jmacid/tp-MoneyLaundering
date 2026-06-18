@@ -27,6 +27,7 @@ services:
     - SERVER_HOST=gateway
     - SERVER_PORT=5678
     - OUTPUT_FILE_MINOR_RESULT=/output/client_1_minor_result.csv
+    - OUTPUT_FILE_AMOUNT_ACCOUNTS=/output/client_1_amount_accounts.csv
     volumes:
     - ./datasets:/datasets
     - ./output:/output
@@ -41,7 +42,8 @@ services:
     - INPUT_FILE=/datasets/HI-Small_Trans.csv
     - SERVER_HOST=gateway
     - SERVER_PORT=5678
-    - OUTPUT_FILE_MINOR_RESULT=/output/client_1_minor_result.csv
+    - OUTPUT_FILE_MINOR_RESULT=/output/client_2_minor_result.csv
+    - OUTPUT_FILE_AMOUNT_ACCOUNTS=/output/client_2_amount_accounts.csv
     volumes:
     - ./datasets:/datasets
     - ./output:/output

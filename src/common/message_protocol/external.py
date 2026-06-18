@@ -11,6 +11,7 @@ class MsgType:
     MAX_PER_BANK = 6
     LOWER_THAN_AVG = 7
     SCATTER_GATHER_ACCOUNTS = 8
+    AMOUNT_ACCOUNTS = 9
 
 
 def _recv_sized(socket, size):
@@ -83,6 +84,10 @@ def _recv_scatter_gather_accounts(socket):
     return json.loads(_recv_string(socket))
 
 
+def _recv_amount_accounts(socket):
+    return json.loads(_recv_string(socket))
+
+
 RECV_MSG_HANDLERS = {
     MsgType.TRANSACTION_RECORD: _recv_transaction_record,
     # MsgType.TRANSACTION_TOP: _recv_transaction_top,
@@ -92,6 +97,7 @@ RECV_MSG_HANDLERS = {
     MsgType.MAX_PER_BANK: _recv_max_per_bank,
     MsgType.LOWER_THAN_AVG: _recv_lower_than_avg,
     MsgType.SCATTER_GATHER_ACCOUNTS: _recv_scatter_gather_accounts,
+    MsgType.AMOUNT_ACCOUNTS: _recv_amount_accounts,
 }
 
 
@@ -169,6 +175,12 @@ def _send_scatter_gather_accounts(socket, result_dict):
     socket.sendall(msg)
 
 
+def _send_amount_accounts(socket, result_dict):
+    msg = external_serializer.serialize_uint32(MsgType.AMOUNT_ACCOUNTS)
+    msg += _serialize_string(json.dumps(result_dict))
+    socket.sendall(msg)
+
+
 SEND_MSG_HANDLERS = {
     MsgType.TRANSACTION_RECORD: _send_transaction_record,
     # MsgType.TRANSACTION_TOP: _send_transaction_top,
@@ -178,6 +190,7 @@ SEND_MSG_HANDLERS = {
     MsgType.MAX_PER_BANK: _send_max_per_bank,
     MsgType.LOWER_THAN_AVG: _send_lower_than_avg,
     MsgType.SCATTER_GATHER_ACCOUNTS: _send_scatter_gather_accounts,
+    MsgType.AMOUNT_ACCOUNTS: _send_amount_accounts,
 }
 
 
