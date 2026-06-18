@@ -1,3 +1,4 @@
+from asyncio import IncompleteReadError
 import os
 import logging
 import socket
@@ -6,6 +7,7 @@ import csv
 import threading
 import socket
 import time
+import select
 from common import message_protocol
 from src.common.message_protocol.pending_batches_table import PendingBatchesTable
 from src.common.message_protocol.batch_spliter import build_batches
@@ -122,47 +124,57 @@ class Client:
             pending.increment_retries(p.batch.sequence_number)
 
 
-    def _receiver_loop(self, pending: PendingBatchesTable, stop_event: threading.Event, eof_acked: threading.Event):
+    def _receiver_loop(self, pending, stop_event, eof_acked):
         eofs_received = 0
         while not stop_event.is_set():
-            try:
-                self.server_socket.settimeout(0.1)
-                msg_type, msg_payload = message_protocol.external.recv_msg(self.server_socket)
-
-                if msg_type == message_protocol.external.MsgType.ACK:
-                    sequence_number = msg_payload
-                    pending.remove(sequence_number)
-                    logging.info(f"[_receiver_loop] ACK received for batch {sequence_number}")
-
-                elif msg_type == message_protocol.external.MsgType.ACK_EOF:
-                    logging.info("[_receiver_loop] ACK_EOF received")
-                    eof_acked.set()
-
-                elif msg_type == message_protocol.external.MsgType.MINOR_RESULT:
-                    self._save_minor_result(msg_payload)
-
-                elif msg_type == message_protocol.external.MsgType.END_OF_RECORDS:
-                    eofs_received += 1
-                    logging.info(f"[_receiver_loop] EOF received ({eofs_received}/{EXPECTED_EOFS})")
-                    if eofs_received >= EXPECTED_EOFS:
-                        logging.info("[_receiver_loop] All EOFs received")
-                        return
-
-            except socket.timeout:
+            ready, _, _ = select.select([self.server_socket], [], [], 0.1)
+            if not ready:
                 continue
+            try:
+                msg_type, msg_payload = message_protocol.external.recv_msg(self.server_socket)
+            except IncompleteReadError:
+                logging.warning("[_receiver_loop] Connection closed mid-message, stopping receiver")
+                return
+            except Exception as e:
+                logging.error(f"[_receiver_loop] Unexpected error parsing message: {e}")
+                return 
+
+            if msg_type == message_protocol.external.MsgType.ACK:
+                sequence_number = msg_payload
+                pending.remove(sequence_number)
+                logging.info(f"[_receiver_loop] ACK received for batch {sequence_number}")
+
+            elif msg_type == message_protocol.external.MsgType.ACK_EOF:
+                logging.info("[_receiver_loop] ACK_EOF received")
+                eof_acked.set()
+
+            elif msg_type == message_protocol.external.MsgType.MINOR_RESULT:
+                self._save_minor_result(msg_payload)
+
+            elif msg_type == message_protocol.external.MsgType.END_OF_RECORDS:
+                eofs_received += 1
+                logging.info(f"[_receiver_loop] EOF received ({eofs_received}/{EXPECTED_EOFS})")
+                if eofs_received >= EXPECTED_EOFS:
+                    logging.info("[_receiver_loop] All EOFs received")
+                    if self.output_file_minor_result is not None:
+                        self.output_file_minor_result.close()
+                    return
 
     def _save_minor_result(self, msg_payload):
         logging.info(f"result: {msg_payload}")
         file_exists = os.path.isfile(OUTPUT_FILE_MINOR_RESULT)
+        
         if self.output_file_minor_result is None:
-            self.output_file_minor_result = open(OUTPUT_FILE_MINOR_RESULT, "x")
+            self.output_file_minor_result = open(OUTPUT_FILE_MINOR_RESULT, "a", newline="")
             self.csv_writer = csv.writer(self.output_file_minor_result, delimiter=",", quotechar='"')
         
-        if not file_exists:
+        if os.stat(OUTPUT_FILE_MINOR_RESULT).st_size == 0:
             self.csv_writer.writerow(msg_payload[0].keys()) 
         
         for transaction in msg_payload:
             self.csv_writer.writerow(transaction.values())
+        
+        self.output_file_minor_result.flush()
 
 def main() -> int:
     logging.basicConfig(level=logging.INFO)

@@ -11,6 +11,8 @@ from workers.dispatchers.broadcast_dispatcher import BroadcastDispatcher
 from workers.dispatchers.bank_dispatcher import BankDispatcher
 import json
 from common import middleware
+from common import message_protocol
+from common.message_protocol.transaction_batch import TransactionBatch
 
 ALLOWED_OPERATIONS = ["currency_filter","amount_filter","date_range_filter","payment_method_filter",
                       "payment_method_counter","currency_normalizer", "projection_dispatcher","bank_dispatcher",
@@ -91,21 +93,32 @@ def main():
 
     logging.info(f"Initialized successfully operation: {os.getenv("OPERATION_TYPE")}")
 
-    def handle_message(transaction):
-        # logging.info("Processing transaction: %s", transaction)
+    def handle_message(message):
+        raw_dict = message
+        transaction_batch = TransactionBatch(
+            sequence_number=raw_dict["sequence_number"],
+            lines=raw_dict["lines"],
+            is_last=raw_dict["is_last"],
+            client_id=raw_dict["client_id"]
+        )
 
-        result = operation.process(transaction)
+        result = operation.process(transaction_batch)
+        
         if result is not None:
             logging.info(f"Processed transaction result: {result}")
 
         if result is not None and dispatcher is not None:
-            dispatcher.process([result])
+            if isinstance(result, TransactionBatch):
+                dispatcher.process([result.lines], original=result)
+            else:
+                dispatcher.process([result], original=transaction_batch)
+            
         if isinstance(operation, ProjectionDispatcher):
             emitted_count = 1
         else:
             emitted_count = 1 if result is not None else 0
 
-        client_id = transaction[0] if isinstance(transaction, list) else transaction.get("client_id")
+        client_id = transaction_batch.client_id
 
         control_msg = json.dumps({
             "client_id": client_id,

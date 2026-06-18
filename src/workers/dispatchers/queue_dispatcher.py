@@ -1,7 +1,4 @@
-import json
 import os
-from typing import Any
-
 from common import middleware
 from common.message_protocol.transaction_batch import TransactionBatch
 from common.message_protocol.internal import serialize
@@ -33,5 +30,10 @@ class QueueDispatcher:
 
     def process(self, batch_per_queue: list[list[dict]], original: TransactionBatch) -> None:
         for queue, lines in zip(self.output_queues, batch_per_queue):
-            tb = TransactionBatch(original.sequence_number, lines, original.is_last, original.client_id)
-            self.middlewares[queue].send(serialize(tb))
+            tb = TransactionBatch(
+                sequence_number=original.sequence_number, 
+                lines=lines, 
+                is_last=original.is_last, 
+                client_id=original.client_id
+            )
+            self.middlewares[queue].send(serialize(tb.to_dict()))
