@@ -1,8 +1,8 @@
 from datetime import datetime
 import os
-from typing import Any
 from operations.core.operation_strategy import OperationStrategy
 from shared.validators.transaction_validator import TransactionValidator
+from common.message_protocol.transaction_batch import TransactionBatch
 import logging
 
 class DateRangeFilter(OperationStrategy):
@@ -24,19 +24,28 @@ class DateRangeFilter(OperationStrategy):
         logging.info(f"End date: {self.end_date}")
         self.required_fields = ["timestamp"]
 
-    def process(self, transaction: dict[str, Any]) -> dict[str, Any] | None:
+    def process(self, batch: TransactionBatch) -> TransactionBatch | None:
+        filtered_lines = []
 
-        TransactionValidator.validate_required_fields(transaction, self.required_fields)
-        
-        try:
-            timestamp = datetime.strptime(transaction["timestamp"], "%Y/%m/%d %H:%M")
-            pass
-        except Exception as e:
-            logging.error(f"Timestamp: {timestamp} could not be formated")
+        for transaction in batch.lines:
+            TransactionValidator.validate_required_fields(transaction, self.required_fields)
+            
+            try:
+                timestamp = datetime.strptime(transaction["timestamp"], "%Y/%m/%d %H:%M")
+                
+                if self.start_date <= timestamp <= self.end_date:
+                    filtered_lines.append(transaction)
+                    
+            except Exception as e:
+                logging.error(f"Timestamp: {transaction.get('timestamp')} could not be formatted: {e}")
+                continue
+
+        if not filtered_lines and not batch.is_last:
             return None
 
-
-        if self.start_date <= timestamp <= self.end_date:
-            return transaction
-
-        return None
+        return TransactionBatch(
+            sequence_number=batch.sequence_number,
+            lines=filtered_lines,
+            is_last=batch.is_last,
+            client_id=batch.client_id
+        )

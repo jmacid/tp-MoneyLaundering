@@ -1,8 +1,8 @@
 from decimal import Decimal
 import os
-from typing import Any
 from operations.core.operation_strategy import OperationStrategy
 from shared.validators.transaction_validator import TransactionValidator
+from common.message_protocol.transaction_batch import TransactionBatch
 import logging
 
 class AmountFilter(OperationStrategy):
@@ -15,15 +15,32 @@ class AmountFilter(OperationStrategy):
         if minimum_amount is None and not minimum_amount_raw:
             raise ValueError("Missing environment variable: MINIMUM_AMOUNT")
 
-        self.minimum_amount = (minimum_amount or Decimal(minimum_amount_raw))
-        logging.info(f"minimum_amount: {minimum_amount}")
+        self.minimum_amount = minimum_amount or Decimal(minimum_amount_raw)
+        logging.info(f"minimum_amount configurado: {self.minimum_amount}")
         self.required_fields = [self.amount_field]
 
-    def process(self, transaction: dict[str, Any]) -> dict[str, Any] | None:
+    def process(self, batch: TransactionBatch) -> TransactionBatch | None:
+        filtered_lines = []
 
-        TransactionValidator.validate_required_fields(transaction, self.required_fields)
+        for transaction in batch.lines:
+            TransactionValidator.validate_required_fields(transaction, self.required_fields)
 
-        logging.info(f"transaction amount_paid: {transaction[self.amount_field]} - {self.minimum_amount}")
-        if Decimal(transaction[self.amount_field]) < self.minimum_amount:
-            return transaction
-        return None
+            try:
+                transaction_amount = Decimal(str(transaction[self.amount_field]))
+                
+                if transaction_amount < self.minimum_amount:
+                    filtered_lines.append(transaction)
+                    
+            except Exception as e:
+                logging.error(f"Error parsing amount in field {self.amount_field}: {e}")
+                continue
+
+        if not filtered_lines and not batch.is_last:
+            return None
+
+        return TransactionBatch(
+            sequence_number=batch.sequence_number,
+            lines=filtered_lines,
+            is_last=batch.is_last,
+            client_id=batch.client_id
+        )
