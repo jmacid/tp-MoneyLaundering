@@ -7,6 +7,10 @@ up:
 	docker compose -f docker-compose.yaml logs --follow
 .PHONY: up
 
+up-client:
+	docker compose -f docker-compose-client.yaml up
+.PHONY: up
+
 down:
 	docker compose -f docker-compose.yaml stop -t 5
 	docker compose -f docker-compose.yaml down -v
