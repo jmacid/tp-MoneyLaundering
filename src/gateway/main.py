@@ -125,7 +125,10 @@ def handle_client_response(client_list):
 
             target_client_id = fields.pop("client_id")
 
-            if "query" in fields and fields["query"] == "query_2":
+            if "query" in fields and fields["query"] == "query_1":
+                msg_type = message_protocol.external.MsgType.MINOR_RESULT
+                fields.pop("query")
+            elif "query" in fields and fields["query"] == "query_2":
                 msg_type = message_protocol.external.MsgType.MAX_PER_BANK
                 fields.pop("query")
             elif "query" in fields and fields["query"] == "query_3":
@@ -137,8 +140,6 @@ def handle_client_response(client_list):
             elif "query" in fields and fields["query"] == "query_5":
                 msg_type = message_protocol.external.MsgType.AMOUNT_ACCOUNTS
                 fields.pop("query")
-            else:
-                msg_type = message_protocol.external.MsgType.MINOR_RESULT
 
             for client_data in client_list:
                 if client_data[0] == target_client_id:
