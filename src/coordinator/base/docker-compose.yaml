@@ -14,11 +14,11 @@ services:
       timeout: 5s
       retries: 10
 
-  pipeline_coordinator:
+  coordinator:
     build:
       context: ../..
-      dockerfile: coordinator/pipeline_coordinator/Dockerfile
-    container_name: pipeline_coordinator
+      dockerfile: coordinator/base/Dockerfile
+    container_name: coordinator
     depends_on:
       rabbitmq:
         condition: service_healthy
@@ -27,12 +27,12 @@ services:
       RABBITMQ_HOST: rabbitmq
       COORDINATOR_QUEUE: coordinator_control_queue
       REPORT_RETRY_SECONDS: 5
-      NODE_TIMEOUT_SECONDS: 15
-      MONITOR_INTERVAL_SECONDS: 2
+      NODE_TIMEOUT_SECONDS: 9999
+      MONITOR_INTERVAL_SECONDS: 9999
       STATE_DB_PATH: /app/data/state.db
     volumes:
-      - pipeline_coordinator_data:/app/data
+      - coordinator_data:/app/data
     restart: unless-stopped
 
 volumes:
-  pipeline_coordinator_data:
+  coordinator_data:
