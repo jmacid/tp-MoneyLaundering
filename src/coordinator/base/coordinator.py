@@ -207,7 +207,12 @@ class Coordinator:
     def handle_stage_eof_detected(self, message: StageEofDetectedMessage) -> None:
         """Create an EOF coordination request when a stage reaches EOF."""
 
-        expected_input = self.client_inputs.get_expected_input(message.client_id)
+        stage = self.stages.get(message.client_id, message.rule_id, message.stage_id)
+
+        if stage is None:
+            expected_input = self.client_inputs.get_expected_input(message.client_id)
+        else:
+            expected_input = stage.expected_input
 
         if expected_input is None:
             logging.warning(
@@ -385,9 +390,6 @@ class Coordinator:
         request.status = "CLOSED"
         self.requests.save(request)
 
-        self.release_client(request)
-        self.create_next_stage_if_needed(request, total_emitted)
-
         logger.info(
             "[REQUEST_CLOSED] request_id=%s client_id=%s rule_id=%s stage_id=%s "
             "total_processed=%s total_emitted=%s",
@@ -398,6 +400,9 @@ class Coordinator:
             total_processed,
             total_emitted,
         )
+
+        self.release_client(request)
+        self.create_next_stage_if_needed(request, total_emitted)
 
     def create_next_stage_if_needed(self, request: Request, expected_input: int) -> None:
         """Create the next stage state using the total emitted by the closed request."""
