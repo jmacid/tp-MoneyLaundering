@@ -3,19 +3,21 @@ import logging
 import socket
 import signal
 import multiprocessing
+import threading
 import message_handler
 from common import middleware, message_protocol
 import uuid
 import json
-import csv 
+import csv
 
 SERVER_HOST = os.environ["SERVER_HOST"]
 SERVER_PORT = int(os.environ["SERVER_PORT"])
 
 MOM_HOST = os.environ["MOM_HOST"]
-INPUT_QUEUE = os.environ["INPUT_QUEUE"]
+INPUT_QUEUES = [q.strip() for q in os.environ["INPUT_QUEUE"].split(",") if q.strip()]
 OUTPUT_QUEUE = os.environ["OUTPUT_QUEUE"]
 EOF_CONTROL_QUEUES = [q.strip() for q in os.environ["EOF_CONTROL_QUEUE"].split(",") if q.strip()]
+EOFS_EXPECTED = int(os.getenv("EOFS_EXPECTED", "1"))
 
 BANKS_CSV_PATH = os.getenv("BANKS_CSV_PATH", "banks.csv")
 RESOLVERS_COUNT = int(os.getenv("RESOLVERS_COUNT", "1"))
@@ -104,22 +106,35 @@ def handle_client_request(client_socket, message_handler):
 
 def handle_client_response(client_list):
     logging.basicConfig(level=logging.INFO)
-    logging.info(f"Listening to {INPUT_QUEUE} queue")
-    input_queue = middleware.MessageMiddlewareQueueRabbitMQ(MOM_HOST, INPUT_QUEUE)
+    eof_counts = {}
+    eof_lock = threading.Lock()
 
-    def _consume_result(message, ack, nack):
+    def _consume_result(input_queue, message, ack, nack):
         try:
             fields = message_protocol.internal.deserialize(message)
 
             if isinstance(fields, list) and len(fields) == 1:
                 target_client_id = fields[0]
-                logging.info(f"Gateway received EOF for client {target_client_id[:8]}. Sending to client...")
+                with eof_lock:
+                    eof_counts[target_client_id] = eof_counts.get(target_client_id, 0) + 1
+                    count = eof_counts[target_client_id]
+
+                logging.info(f"Gateway received EOF {count}/{EOFS_EXPECTED} for client {target_client_id[:8]}.")
+
+                if count < EOFS_EXPECTED:
+                    ack()
+                    return
+
+                with eof_lock:
+                    del eof_counts[target_client_id]
+
+                logging.info(f"All EOFs received for client {target_client_id[:8]}. Sending END_OF_RECORDS to client.")
 
                 for idx, client_data in enumerate(client_list):
                     if client_data[0] == target_client_id:
                         target_socket = client_data[2]
                         message_protocol.external.send_msg(target_socket, message_protocol.external.MsgType.END_OF_RECODS)
-                        client_list.pop(idx) 
+                        client_list.pop(idx)
                         break
                 ack()
                 return
@@ -162,8 +177,17 @@ def handle_client_response(client_list):
             nack()
             input_queue.stop_consuming()
 
-    input_queue.start_consuming(_consume_result)
-    input_queue.close()
+    def _consume_queue(queue_name):
+        logging.info(f"Listening to {queue_name} queue")
+        input_queue = middleware.MessageMiddlewareQueueRabbitMQ(MOM_HOST, queue_name)
+        input_queue.start_consuming(lambda msg, ack, nack: _consume_result(input_queue, msg, ack, nack))
+        input_queue.close()
+
+    threads = [threading.Thread(target=_consume_queue, args=(q,), daemon=True) for q in INPUT_QUEUES]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
 
 
 def handle_sigterm(server_socket, client_list, sigterm_received):

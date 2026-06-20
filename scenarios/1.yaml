@@ -95,7 +95,7 @@ services:
     build:
       context: ./src/
       dockerfile: workers/worker/Dockerfile
-    container_name: projection_dispatcher3
+    container_name: projection_dispatcher_3
     depends_on:
       rabbitmq:
         condition: service_healthy
