@@ -15,7 +15,7 @@ SERVER_PORT = int(os.environ["SERVER_PORT"])
 MOM_HOST = os.environ["MOM_HOST"]
 INPUT_QUEUE = os.environ["INPUT_QUEUE"]
 OUTPUT_QUEUE = os.environ["OUTPUT_QUEUE"]
-EOF_CONTROL_QUEUE = os.environ["EOF_CONTROL_QUEUE"]
+EOF_CONTROL_QUEUES = [q.strip() for q in os.environ["EOF_CONTROL_QUEUE"].split(",") if q.strip()]
 
 BANKS_CSV_PATH = os.getenv("BANKS_CSV_PATH", "banks.csv")
 RESOLVERS_COUNT = int(os.getenv("RESOLVERS_COUNT", "1"))
@@ -42,7 +42,10 @@ def load_bank_mapping(file_path):
 
 def handle_client_request(client_socket, message_handler):
     output_queue = middleware.MessageMiddlewareQueueRabbitMQ(MOM_HOST, OUTPUT_QUEUE)
-    control_queue = middleware.MessageMiddlewareQueueRabbitMQ(MOM_HOST, EOF_CONTROL_QUEUE)
+    control_queues = [
+        middleware.MessageMiddlewareQueueRabbitMQ(MOM_HOST, q)
+        for q in EOF_CONTROL_QUEUES
+    ]
 
     try:
         bank_map = load_bank_mapping(BANKS_CSV_PATH)
@@ -82,7 +85,8 @@ def handle_client_request(client_socket, message_handler):
                     "node": "gateway",
                     "emitted": transactions_sent
                 })
-                control_queue.send(eof_msg.encode('utf-8'))
+                for control_queue in control_queues:
+                    control_queue.send(eof_msg.encode('utf-8'))
 
                 message_protocol.external.send_msg(
                     client_socket, message_protocol.external.MsgType.ACK
@@ -94,7 +98,8 @@ def handle_client_request(client_socket, message_handler):
         logging.error(e)
     finally:
         output_queue.close()
-        control_queue.close()
+        for control_queue in control_queues:
+            control_queue.close()
 
 
 def handle_client_response(client_list):

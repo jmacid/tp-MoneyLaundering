@@ -21,7 +21,7 @@ logging.basicConfig(
     format="%(asctime)s [%(levelname)s] %(message)s",
 )
 
-EOF_CONTROL_QUEUE =os.getenv("EOF_CONTROL_QUEUE", "eof_control_queue")
+EOF_CONTROL_QUEUES = [q.strip() for q in os.getenv("EOF_CONTROL_QUEUE", "eof_control_queue").split(",") if q.strip()]
 RABBITMQ_HOST = os.getenv("RABBITMQ_HOST", "rabbitmq")
 
 def build_operation():
@@ -82,10 +82,10 @@ def main():
     dispatcher = initialize_dispatcher()
     consumer = initialize_consumer()
 
-    control_queue = middleware.MessageMiddlewareQueueRabbitMQ(
-        RABBITMQ_HOST,
-        EOF_CONTROL_QUEUE
-    )
+    control_queues = [
+        middleware.MessageMiddlewareQueueRabbitMQ(RABBITMQ_HOST, q)
+        for q in EOF_CONTROL_QUEUES
+    ]
 
     node_name = os.getenv("NODE_NAME", os.getenv("OPERATION_TYPE"))
 
@@ -113,7 +113,8 @@ def main():
             "processed": 1,
             "emitted": emitted_count
         })
-        control_queue.send(control_msg.encode('utf-8'))
+        for control_queue in control_queues:
+            control_queue.send(control_msg.encode('utf-8'))
 
     consumer.start(handle_message)
 
