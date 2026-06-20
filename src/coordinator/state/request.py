@@ -2,7 +2,6 @@ from dataclasses import dataclass, field
 from typing import Any
 import time
 
-
 @dataclass
 class Request:
     """Internal state of an EOF coordination round for one client, rule and stage."""
@@ -17,9 +16,6 @@ class Request:
     retry_count: int = 0
     last_retry_at: float = 0.0
     created_at: float = field(default_factory=time.time)
-
-    def can_close(self) -> bool:
-        return self.has_all_reports() and self.total_processed() == self.expected_input
 
     def mark_retry(self) -> None:
         self.retry_count += 1

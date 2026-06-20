@@ -33,6 +33,25 @@ services:
     volumes:
       - coordinator_data:/app/data
     restart: unless-stopped
+  coordinator_2:
+    build:
+      context: ../..
+      dockerfile: coordinator/base/Dockerfile
+    container_name: coordinator_2
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    environment:
+      PYTHONPATH: /app
+      RABBITMQ_HOST: rabbitmq
+      COORDINATOR_QUEUE: coordinator_control_queue
+      REPORT_RETRY_SECONDS: 5
+      NODE_TIMEOUT_SECONDS: 9999
+      MONITOR_INTERVAL_SECONDS: 9999
+      STATE_DB_PATH: /app/data/state.db
+    volumes:
+      - coordinator_data:/app/data
+    restart: unless-stopped
 
 volumes:
   coordinator_data:

@@ -1,16 +1,16 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any
+import time
 
 
-@dataclass(frozen=True)
+@dataclass
 class Report:
-    """Internal state of a node report for an EOF coordination round."""
-
     request_id: str
     node_id: str
     client_id: str
     processed: int
     emitted: int
+    created_at: float = field(default_factory=time.time)
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -19,6 +19,7 @@ class Report:
             "client_id": self.client_id,
             "processed": self.processed,
             "emitted": self.emitted,
+            "created_at": self.created_at,
         }
 
     @staticmethod
@@ -29,4 +30,5 @@ class Report:
             client_id=data["client_id"],
             processed=int(data["processed"]),
             emitted=int(data["emitted"]),
+            created_at=float(data.get("created_at", time.time())),
         )

@@ -8,65 +8,126 @@ from coordinator.state.report import Report
 class ReportStorage:
     """SQLite store for EOF reports sent by worker nodes."""
 
-    TABLE_COLUMNS = "request_id, node_id, client_id, processed, emitted"
+    TABLE_COLUMNS = (
+        "request_id, node_id, client_id, "
+        "processed, emitted, created_at"
+    )
 
     def __init__(self, db_path: str) -> None:
         self.db_path = db_path
         Path(db_path).parent.mkdir(parents=True, exist_ok=True)
 
-        self.connection = sqlite3.connect(db_path, check_same_thread=False)
+        self.connection = sqlite3.connect(
+            db_path,
+            check_same_thread=False,
+            timeout=5,
+            isolation_level=None,
+        )
         self.connection.row_factory = sqlite3.Row
+
+        self.connection.execute("PRAGMA journal_mode=WAL")
+        self.connection.execute("PRAGMA busy_timeout=5000")
 
         self.create_tables()
         logging.debug("[ReportStorage] Initialized | db_path=%s", db_path)
 
     def create_tables(self) -> None:
-        with self.connection:
-            self.connection.execute("""
-                CREATE TABLE IF NOT EXISTS reports (
-                    request_id TEXT NOT NULL,
-                    node_id TEXT NOT NULL,
-                    client_id TEXT NOT NULL,
-                    processed INTEGER NOT NULL,
-                    emitted INTEGER NOT NULL,
-                    PRIMARY KEY (request_id, node_id)
-                )
-            """)
+        self.connection.execute("BEGIN IMMEDIATE")
 
-            self.connection.execute("""
-                CREATE INDEX IF NOT EXISTS idx_reports_request
-                ON reports (request_id)
-            """)
+        self.connection.execute(
+            """
+            CREATE TABLE IF NOT EXISTS reports (
+                request_id TEXT NOT NULL,
+                node_id TEXT NOT NULL,
 
-            self.connection.execute("""
-                CREATE INDEX IF NOT EXISTS idx_reports_client
-                ON reports (client_id)
-            """)
+                client_id TEXT NOT NULL,
+
+                processed INTEGER NOT NULL,
+                emitted INTEGER NOT NULL,
+                created_at REAL NOT NULL,
+
+                PRIMARY KEY (request_id, node_id)
+            )
+            """
+        )
+
+        self.connection.execute(
+            """
+            CREATE INDEX IF NOT EXISTS idx_reports_request
+            ON reports (request_id)
+            """
+        )
+
+        self.connection.execute(
+            """
+            CREATE INDEX IF NOT EXISTS idx_reports_client
+            ON reports (client_id)
+            """
+        )
+
+        self.connection.commit()
 
         logging.debug("[ReportStorage] CREATE_TABLES | Success")
 
     def save(self, report: Report) -> None:
-        with self.connection:
+        """Insert or update a report idempotently.
+
+        A node can report at most once per request. If RabbitMQ redelivers the
+        same report, this updates the same row instead of duplicating it.
+        """
+
+        try:
+            self.connection.execute("BEGIN IMMEDIATE")
+
             self.connection.execute(
                 """
-                INSERT INTO reports (request_id, node_id, client_id, processed, emitted)
-                VALUES (:request_id, :node_id, :client_id, :processed, :emitted)
+                INSERT INTO reports (
+                    request_id,
+                    node_id,
+                    client_id,
+                    processed,
+                    emitted,
+                    created_at
+                )
+                VALUES (?, ?, ?, ?, ?, ?)
                 ON CONFLICT(request_id, node_id) DO UPDATE SET
                     client_id = excluded.client_id,
                     processed = excluded.processed,
-                    emitted = excluded.emitted
+                    emitted = excluded.emitted,
+                    created_at = excluded.created_at
                 """,
-                report.to_dict(),
+                (
+                    report.request_id,
+                    report.node_id,
+                    report.client_id,
+                    report.processed,
+                    report.emitted,
+                    report.created_at,
+                ),
             )
 
-        logging.debug(
-            "[ReportStorage] SAVE | request_id=%s node_id=%s client_id=%s processed=%s emitted=%s",
-            report.request_id, report.node_id, report.client_id, report.processed, report.emitted,
-        )
+            self.connection.commit()
+
+            logging.debug(
+                "[ReportStorage] SAVE | request_id=%s node_id=%s processed=%s emitted=%s",
+                report.request_id,
+                report.node_id,
+                report.processed,
+                report.emitted,
+            )
+
+        except Exception:
+            self.connection.rollback()
+            raise
 
     def get(self, request_id: str, node_id: str) -> Report | None:
         row = self.connection.execute(
-            f"SELECT {self.TABLE_COLUMNS} FROM reports WHERE request_id = ? AND node_id = ?",
+            f"""
+            SELECT {self.TABLE_COLUMNS}
+            FROM reports
+            WHERE request_id = ?
+              AND node_id = ?
+            """,
             (request_id, node_id),
         ).fetchone()
 
@@ -74,7 +135,11 @@ class ReportStorage:
 
     def list_by_request(self, request_id: str) -> dict[str, Report]:
         rows = self.connection.execute(
-            f"SELECT {self.TABLE_COLUMNS} FROM reports WHERE request_id = ?",
+            f"""
+            SELECT {self.TABLE_COLUMNS}
+            FROM reports
+            WHERE request_id = ?
+            """,
             (request_id,),
         ).fetchall()
 
@@ -82,7 +147,11 @@ class ReportStorage:
 
     def list_by_client(self, client_id: str) -> dict[tuple[str, str], Report]:
         rows = self.connection.execute(
-            f"SELECT {self.TABLE_COLUMNS} FROM reports WHERE client_id = ?",
+            f"""
+            SELECT {self.TABLE_COLUMNS}
+            FROM reports
+            WHERE client_id = ?
+            """,
             (client_id,),
         ).fetchall()
 
@@ -109,38 +178,60 @@ class ReportStorage:
 
     def count_by_request(self, request_id: str) -> int:
         row = self.connection.execute(
-            "SELECT COUNT(*) AS report_count FROM reports WHERE request_id = ?",
+            """
+            SELECT COUNT(*) AS report_count
+            FROM reports
+            WHERE request_id = ?
+            """,
             (request_id,),
         ).fetchone()
 
         return int(row["report_count"])
 
     def delete(self, request_id: str, node_id: str) -> bool:
-        with self.connection:
-            cursor = self.connection.execute(
-                "DELETE FROM reports WHERE request_id = ? AND node_id = ?",
-                (request_id, node_id),
-            )
+        self.connection.execute("BEGIN IMMEDIATE")
+
+        cursor = self.connection.execute(
+            """
+            DELETE FROM reports
+            WHERE request_id = ?
+              AND node_id = ?
+            """,
+            (request_id, node_id),
+        )
+
+        self.connection.commit()
 
         deleted = cursor.rowcount > 0
+
         logging.debug(
             "[ReportStorage] DELETE | request_id=%s node_id=%s deleted=%s",
-            request_id, node_id, deleted,
+            request_id,
+            node_id,
+            deleted,
         )
 
         return deleted
 
     def delete_by_request(self, request_id: str) -> int:
-        with self.connection:
-            cursor = self.connection.execute(
-                "DELETE FROM reports WHERE request_id = ?",
-                (request_id,),
-            )
+        self.connection.execute("BEGIN IMMEDIATE")
+
+        cursor = self.connection.execute(
+            """
+            DELETE FROM reports
+            WHERE request_id = ?
+            """,
+            (request_id,),
+        )
+
+        self.connection.commit()
 
         deleted_count = cursor.rowcount
+
         logging.debug(
             "[ReportStorage] DELETE_BY_REQUEST | request_id=%s deleted_count=%s",
-            request_id, deleted_count,
+            request_id,
+            deleted_count,
         )
 
         return deleted_count
@@ -159,6 +250,7 @@ class ReportStorage:
 
         for row in rows:
             report = cls._row_to_report(row)
+
             if report is not None:
                 reports[report.node_id] = report
 

@@ -23,23 +23,41 @@ class RequestStorage:
 
         self.create_tables()
         logging.debug("[RequestStorage] Initialized | db_path=%s", db_path)
+    
+    def _connect(self) -> sqlite3.Connection:
+        conn = sqlite3.connect(
+            self.db_path,
+            timeout=5,
+            isolation_level=None,
+        )
+        conn.row_factory = sqlite3.Row
+        conn.execute("PRAGMA journal_mode=WAL;")
+        conn.execute("PRAGMA busy_timeout=5000;")
+        return conn
 
     def create_tables(self) -> None:
         with self.connection:
-            self.connection.execute("""
+            self.connection.execute(
+                """
                 CREATE TABLE IF NOT EXISTS requests (
                     request_id TEXT PRIMARY KEY,
+
                     client_id TEXT NOT NULL,
                     rule_id TEXT NOT NULL,
                     stage_id TEXT NOT NULL,
+
                     expected_input INTEGER NOT NULL,
                     expected_nodes TEXT NOT NULL,
+
                     status TEXT NOT NULL,
                     retry_count INTEGER NOT NULL,
                     last_retry_at REAL NOT NULL,
-                    created_at REAL NOT NULL
+                    created_at REAL NOT NULL,
+
+                    UNIQUE(client_id, rule_id, stage_id)
                 )
-            """)
+                """
+            )
 
             self.connection.execute("""
                 CREATE INDEX IF NOT EXISTS idx_requests_client_rule_stage
@@ -54,19 +72,24 @@ class RequestStorage:
         logging.debug("[RequestStorage] CREATE_TABLES | Success")
 
     def save(self, request: Request) -> None:
-        data = self._request_to_row_data(request)
+        with self._connect() as conn:
+            conn.execute("BEGIN IMMEDIATE")
 
-        with self.connection:
-            self.connection.execute(
+            conn.execute(
                 """
                 INSERT INTO requests (
-                    request_id, client_id, rule_id, stage_id, expected_input,
-                    expected_nodes, status, retry_count, last_retry_at, created_at
+                    request_id,
+                    client_id,
+                    rule_id,
+                    stage_id,
+                    expected_input,
+                    expected_nodes,
+                    status,
+                    retry_count,
+                    last_retry_at,
+                    created_at
                 )
-                VALUES (
-                    :request_id, :client_id, :rule_id, :stage_id, :expected_input,
-                    :expected_nodes, :status, :retry_count, :last_retry_at, :created_at
-                )
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT(request_id) DO UPDATE SET
                     client_id = excluded.client_id,
                     rule_id = excluded.rule_id,
@@ -78,13 +101,73 @@ class RequestStorage:
                     last_retry_at = excluded.last_retry_at,
                     created_at = excluded.created_at
                 """,
-                data,
+                (
+                    request.request_id,
+                    request.client_id,
+                    request.rule_id,
+                    request.stage_id,
+                    request.expected_input,
+                    json.dumps(sorted(request.expected_nodes)),
+                    request.status,
+                    request.retry_count,
+                    request.last_retry_at,
+                    request.created_at,
+                ),
             )
 
-        logging.debug(
-            "[RequestStorage] SAVE | request_id=%s client_id=%s rule_id=%s stage_id=%s status=%s",
-            request.request_id, request.client_id, request.rule_id, request.stage_id, request.status,
-        )
+            conn.commit()
+    
+    def create_if_absent(self, request: Request) -> Request | None:
+        """Create an EOF request only if no request exists for the same client, rule and stage.
+
+        Returns the request if this coordinator created it.
+        Returns None if another coordinator already created it.
+        """
+
+        with self._connect() as conn:
+            try:
+                conn.execute("BEGIN IMMEDIATE")
+
+                conn.execute(
+                    """
+                    INSERT INTO requests (
+                        request_id,
+                        client_id,
+                        rule_id,
+                        stage_id,
+                        expected_input,
+                        expected_nodes,
+                        status,
+                        retry_count,
+                        last_retry_at,
+                        created_at
+                    )
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        request.request_id,
+                        request.client_id,
+                        request.rule_id,
+                        request.stage_id,
+                        request.expected_input,
+                        json.dumps(sorted(request.expected_nodes)),
+                        request.status,
+                        request.retry_count,
+                        request.last_retry_at,
+                        request.created_at,
+                    ),
+                )
+
+                conn.commit()
+                return request
+
+            except sqlite3.IntegrityError:
+                conn.rollback()
+                return None
+
+            except Exception:
+                conn.rollback()
+                raise
 
     def get(self, request_id: str) -> Request | None:
         row = self.connection.execute(
@@ -145,6 +228,24 @@ class RequestStorage:
         self.save(request)
         return request
 
+    def mark_closed(self, request_id: str) -> None:
+        """Mark a request as closed."""
+
+        with self._connect() as conn:
+            conn.execute("BEGIN IMMEDIATE")
+
+            conn.execute(
+                """
+                UPDATE requests
+                SET status = 'CLOSED'
+                WHERE request_id = ?
+                AND status = 'CLOSING'
+                """,
+                (request_id,),
+            )
+
+            conn.commit()
+
     def add_report(self, request_id: str, node_id: str, processed: int, emitted: int) -> Request | None:
         request = self.get(request_id)
 
@@ -180,6 +281,53 @@ class RequestStorage:
         self.connection.close()
         logging.debug("[RequestStorage] CLOSE | Success")
 
+    def claim_for_close(self, request_id: str) -> Request | None:
+        """Atomically claim a request for closing.
+
+        Moves the request from WAITING to CLOSING.
+
+        Returns the request if this coordinator won the right to close it.
+        Returns None if the request was already closing, closed, or does not exist.
+        """
+
+        with self._connect() as conn:
+            try:
+                conn.execute("BEGIN IMMEDIATE")
+
+                cursor = conn.execute(
+                    """
+                    UPDATE requests
+                    SET status = 'CLOSING'
+                    WHERE request_id = ?
+                    AND status = 'WAITING'
+                    """,
+                    (request_id,),
+                )
+
+                if cursor.rowcount != 1:
+                    conn.rollback()
+                    return None
+
+                row = conn.execute(
+                    """
+                    SELECT *
+                    FROM requests
+                    WHERE request_id = ?
+                    """,
+                    (request_id,),
+                ).fetchone()
+
+                conn.commit()
+
+                if row is None:
+                    return None
+
+                return self._row_to_request(row)
+
+            except Exception:
+                conn.rollback()
+                raise
+
     @staticmethod
     def _request_to_row_data(request: Request) -> dict[str, object]:
         return {
@@ -195,15 +343,19 @@ class RequestStorage:
             "created_at": request.created_at,
         }
 
-    @staticmethod
-    def _row_to_request(row: sqlite3.Row | None) -> Request | None:
-        if row is None:
-            return None
-
-        data = dict(row)
-        data["expected_nodes"] = json.loads(data["expected_nodes"])
-
-        return Request.from_dict(data)
+    def _row_to_request(self, row: sqlite3.Row) -> Request:
+        return Request(
+            request_id=row["request_id"],
+            client_id=row["client_id"],
+            rule_id=row["rule_id"],
+            stage_id=row["stage_id"],
+            expected_input=int(row["expected_input"]),
+            expected_nodes=set(json.loads(row["expected_nodes"])),
+            status=row["status"],
+            retry_count=int(row["retry_count"]),
+            last_retry_at=float(row["last_retry_at"]),
+            created_at=float(row["created_at"]),
+        )
 
     @classmethod
     def _rows_to_requests(cls, rows: list[sqlite3.Row]) -> dict[str, Request]:
