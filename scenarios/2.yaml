@@ -47,11 +47,11 @@ services:
     ports:
     - 5672:5672
     - 15672:15672
-  projection_dispatcher_1:
+  projection_dispatcher_r2_1:
     build:
       context: ./src/
       dockerfile: workers/worker/Dockerfile
-    container_name: projection_dispatcher_1
+    container_name: projection_dispatcher_r2_1
     depends_on:
       rabbitmq:
         condition: service_healthy
@@ -62,11 +62,11 @@ services:
       - INPUT_QUEUE=transactions
       - OUTPUTS=minor_query,max_query,avg_query,scatter_gather_query,count_query
       - EOF_CONTROL_QUEUE=eof_control_queue_2
-  currency_filter_1:
+  currency_filter_r2_1:
     build:
       context: ./src/
       dockerfile: workers/worker/Dockerfile
-    container_name: currency_filter_1
+    container_name: currency_filter_r2_1
     depends_on:
       rabbitmq:
         condition: service_healthy
@@ -79,11 +79,11 @@ services:
       - OUTPUTS=to_bank_dispatcher_queue_2
       - CURRENCY=US Dollar
       - EOF_CONTROL_QUEUE=eof_control_queue_2
-  bank_dispatcher_1:
+  bank_dispatcher_r2_1:
     build:
       context: ./src
       dockerfile: workers/worker/Dockerfile
-    container_name: bank_dispatcher_1
+    container_name: bank_dispatcher_r2_1
     depends_on:
       rabbitmq:
         condition: service_healthy
@@ -96,12 +96,12 @@ services:
       - OUTPUT_EXCHANGE=bank_shards_2
       - AGGREGATORS_COUNT=2
       - EOF_CONTROL_QUEUE=eof_control_queue_2
-  local_bank_max_aggregator_0:
+  local_bank_max_aggregator_r2_0:
     build:
       context: ./src
       dockerfile: workers/worker/Dockerfile
     entrypoint: ["python3", "-m", "operations.aggregators.local_bank_max_aggregator"]
-    container_name: local_bank_max_aggregator_0
+    container_name: local_bank_max_aggregator_r2_0
     depends_on:
       rabbitmq:
         condition: service_healthy
@@ -113,11 +113,11 @@ services:
       - OUTPUT_EXCHANGE=max_bank_transactions
       - DISPATCHERS_AMOUNT=1
       - RESOLVERS_COUNT=1
-  bank_resolver_1:
+  bank_resolver_r2_1:
     build:
       context: ./src/
       dockerfile: workers/resolver/Dockerfile
-    container_name: bank_resolver_1
+    container_name: bank_resolver_r2_1
     depends_on:
       rabbitmq:
         condition: service_healthy
@@ -128,11 +128,11 @@ services:
       - INPUT_EXCHANGE=max_bank_transactions
       - OUTPUT_QUEUE=results_queue_2
       - AGGREGATORS_COUNT=1
-  eof_tracker:
+  eof_tracker_r2:
     build:
       context: ./src/
       dockerfile: tracker/Dockerfile
-    container_name: eof_tracker
+    container_name: eof_tracker_r2
     depends_on:
       rabbitmq:
         condition: service_healthy
