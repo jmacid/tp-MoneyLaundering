@@ -8,14 +8,14 @@ services:
       rabbitmq:
         condition: service_healthy
     environment:
-    - INPUT_QUEUE=minor_transactions,results_queue_2
+    - INPUT_QUEUE=minor_transactions,results_queue_2,threshold_transactions_3
     - MOM_HOST=rabbitmq
     - OUTPUT_QUEUE=transactions
     - PYTHONUNBUFFERED=1
     - SERVER_HOST=gateway
     - SERVER_PORT=5678
-    - EOF_CONTROL_QUEUE=eof_control_queue_1,eof_control_queue_2
-    - EOFS_EXPECTED=2
+    - EOF_CONTROL_QUEUE=eof_control_queue_1,eof_control_queue_2,eof_control_queue_3
+    - EOFS_EXPECTED=3
   rabbitmq:
     build:
       context: ./src/rabbitmq
@@ -46,7 +46,7 @@ services:
       - INPUT_MIDDLEWARE_TYPE=queue
       - INPUT_QUEUE=transactions
       - OUTPUTS=minor_query,max_query,avg_query,scatter_gather_query,count_query
-      - EOF_CONTROL_QUEUE=eof_control_queue_1,eof_control_queue_2
+      - EOF_CONTROL_QUEUE=eof_control_queue_1,eof_control_queue_2,eof_control_queue_3
   projection_dispatcher_2:
     build:
       context: ./src/
@@ -61,7 +61,7 @@ services:
       - INPUT_MIDDLEWARE_TYPE=queue
       - INPUT_QUEUE=transactions
       - OUTPUTS=minor_query,max_query,avg_query,scatter_gather_query,count_query
-      - EOF_CONTROL_QUEUE=eof_control_queue_1,eof_control_queue_2
+      - EOF_CONTROL_QUEUE=eof_control_queue_1,eof_control_queue_2,eof_control_queue_3
   projection_dispatcher_3:
     build:
       context: ./src/
@@ -76,7 +76,7 @@ services:
       - INPUT_MIDDLEWARE_TYPE=queue
       - INPUT_QUEUE=transactions
       - OUTPUTS=minor_query,max_query,avg_query,scatter_gather_query,count_query
-      - EOF_CONTROL_QUEUE=eof_control_queue_1,eof_control_queue_2
+      - EOF_CONTROL_QUEUE=eof_control_queue_1,eof_control_queue_2,eof_control_queue_3
   # Rule 1
   currency_filter_r1_1:
     build:
@@ -327,6 +327,133 @@ services:
       - FINAL_QUEUE=to_bank_dispatcher_queue_2
       - TOPOLOGY=gateway,projection_dispatcher,currency_filter
 
+  # Rule 3
+  currency_filter_r3_1:
+    build:
+      context: ./src/
+      dockerfile: workers/worker/Dockerfile
+    container_name: currency_filter_r3_1
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    environment:
+      - RABBITMQ_HOST=rabbitmq
+      - OPERATION_TYPE=currency_filter
+      - INPUT_MIDDLEWARE_TYPE=queue
+      - INPUT_QUEUE=avg_query
+      - OUTPUT_MIDDLEWARE_TYPE=broadcast
+      - OUTPUTS=USD_transactions_3,USD_transactions_avg_3
+      - CURRENCY=US Dollar
+      - EOF_CONTROL_QUEUE=eof_control_queue_3
+  date_range_filter_r3_1:
+    build:
+      context: ./src/
+      dockerfile: workers/worker/Dockerfile
+    container_name: date_range_filter_r3_1
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    environment:
+      - RABBITMQ_HOST=rabbitmq
+      - OPERATION_TYPE=date_range_filter
+      - INPUT_MIDDLEWARE_TYPE=queue
+      - INPUT_QUEUE=USD_transactions_3
+      - OUTPUT_MIDDLEWARE_TYPE=queue
+      - OUTPUTS=threshold_evaluation_3
+      - START_DATE=2022-09-01T00:15:00
+      - END_DATE=2022-09-01T00:30:00
+      - EOF_CONTROL_QUEUE=eof_control_queue_3
+  avg_date_range_filter_r3_1:
+    build:
+      context: ./src/
+      dockerfile: workers/worker/Dockerfile
+    container_name: avg_date_range_filter_r3_1
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    environment:
+      - RABBITMQ_HOST=rabbitmq
+      - OPERATION_TYPE=date_range_filter
+      - NODE_NAME=avg_date_range_filter
+      - INPUT_MIDDLEWARE_TYPE=queue
+      - INPUT_QUEUE=USD_transactions_avg_3
+      - OUTPUT_MIDDLEWARE_TYPE=queue
+      - OUTPUTS=avg_transactions_3
+      - START_DATE=2022-09-01T00:15:00
+      - END_DATE=2022-09-01T00:30:00
+      - EOF_CONTROL_QUEUE=eof_control_queue_3
+  average_worker_r3_1:
+    build:
+      context: ./src
+      dockerfile: operations/average/Dockerfile
+    container_name: average_worker_r3_1
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    environment:
+      - RABBITMQ_HOST=rabbitmq
+      - INPUT_QUEUE=avg_transactions_3
+      - AGGREGATION_PREFIX=local_average_3
+      - AGGREGATION_AMOUNT=1
+      - CONTROL_EXCHANGE=average_control_exchange
+  average_aggregator_r3_0:
+    build:
+      context: ./src
+      dockerfile: operations/aggregators/average/Dockerfile
+    container_name: average_aggregator_r3_0
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    environment:
+      - PYTHONUNBUFFERED=1
+      - RABBITMQ_HOST=rabbitmq
+      - ID=0
+      - INPUT_EXCHANGE=local_average_3
+      - OUTPUT_EXCHANGE=client_average_shards_3
+      - COUNTER_AMOUNT=1
+      - JOINERS_COUNT=1
+  average_joiner_r3_0:
+    build:
+      context: ./src
+      dockerfile: operations/joiners/average/Dockerfile
+    container_name: average_joiner_r3_0
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    environment:
+      - PYTHONUNBUFFERED=1
+      - ID=0
+      - RABBITMQ_HOST=rabbitmq
+      - INPUT_EXCHANGE=client_average_shards_3
+      - OUTPUT_QUEUE=calculated_averages_3
+      - AGGREGATION_AMOUNT=1
+  threshold_evaluator_r3_1:
+    build:
+      context: ./src
+      dockerfile: operations/evaluators/Dockerfile
+    container_name: threshold_evaluator_r3_1
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    environment:
+      - PYTHONUNBUFFERED=1
+      - RABBITMQ_HOST=rabbitmq
+      - TX_QUEUE=threshold_evaluation_3
+      - AVG_QUEUE=calculated_averages_3
+      - OUTPUT_QUEUE=threshold_transactions_3
+  eof_tracker_r3:
+    build:
+      context: ./src/
+      dockerfile: tracker/Dockerfile
+    container_name: eof_tracker_r3
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    environment:
+      - RABBITMQ_HOST=rabbitmq
+      - EOF_CONTROL_QUEUE=eof_control_queue_3
+      - FINAL_QUEUE=avg_transactions_3
+      - TOPOLOGY=gateway,projection_dispatcher,currency_filter,avg_date_range_filter
 
 networks:
   default:
