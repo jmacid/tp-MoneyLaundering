@@ -62,11 +62,11 @@ services:
       - INPUT_QUEUE=transactions
       - OUTPUTS=minor_query,max_query,avg_query,scatter_gather_query,count_query
       - EOF_CONTROL_QUEUE=eof_control_queue_3
-  currency_filter_1:
+  currency_filter_r3_1:
     build:
       context: ./src/
       dockerfile: workers/worker/Dockerfile
-    container_name: currency_filter_1
+    container_name: currency_filter_r3_1
     depends_on:
       rabbitmq:
         condition: service_healthy
@@ -79,11 +79,11 @@ services:
       - OUTPUTS=USD_transactions_3,USD_transactions_avg_3
       - CURRENCY=US Dollar
       - EOF_CONTROL_QUEUE=eof_control_queue_3
-  date_range_filter_1:
+  date_range_filter_r3_1:
     build:
       context: ./src/
       dockerfile: workers/worker/Dockerfile
-    container_name: date_range_filter_1
+    container_name: date_range_filter_r3_1
     depends_on:
       rabbitmq:
         condition: service_healthy
@@ -97,11 +97,11 @@ services:
       - START_DATE=2022-09-01T00:15:00
       - END_DATE=2022-09-01T00:30:00
       - EOF_CONTROL_QUEUE=eof_control_queue_3
-  avg_date_range_filter_1:
+  avg_date_range_filter_r3_1:
     build:
       context: ./src/
       dockerfile: workers/worker/Dockerfile
-    container_name: avg_date_range_filter_1
+    container_name: avg_date_range_filter_r3_1
     depends_on:
       rabbitmq:
         condition: service_healthy
@@ -116,11 +116,11 @@ services:
       - START_DATE=2022-09-01T00:15:00
       - END_DATE=2022-09-01T00:30:00
       - EOF_CONTROL_QUEUE=eof_control_queue_3
-  average_worker_1:
+  average_worker_r3_1:
     build:
       context: ./src
       dockerfile: operations/average/Dockerfile
-    container_name: average_worker_1
+    container_name: average_worker_r3_1
     depends_on:
       rabbitmq:
         condition: service_healthy
@@ -130,11 +130,11 @@ services:
       - AGGREGATION_PREFIX=local_average_3
       - AGGREGATION_AMOUNT=1
       - CONTROL_EXCHANGE=average_control_exchange
-  average_aggregator_0:
+  average_aggregator_r3_0:
     build:
       context: ./src
       dockerfile: operations/aggregators/average/Dockerfile
-    container_name: average_aggregator_0
+    container_name: average_aggregator_r3_0
     depends_on:
       rabbitmq:
         condition: service_healthy
@@ -146,11 +146,11 @@ services:
       - OUTPUT_EXCHANGE=client_average_shards_3
       - COUNTER_AMOUNT=1
       - JOINERS_COUNT=1
-  average_joiner_0:
+  average_joiner_r3_0:
     build:
       context: ./src
       dockerfile: operations/joiners/average/Dockerfile
-    container_name: average_joiner_0
+    container_name: average_joiner_r3_0
     depends_on:
       rabbitmq:
         condition: service_healthy
@@ -161,11 +161,11 @@ services:
       - INPUT_EXCHANGE=client_average_shards_3
       - OUTPUT_QUEUE=calculated_averages_3
       - AGGREGATION_AMOUNT=1
-  threshold_evaluator_1:
+  threshold_evaluator_r3_1:
     build:
       context: ./src
       dockerfile: operations/evaluators/Dockerfile
-    container_name: threshold_evaluator_1
+    container_name: threshold_evaluator_r3_1
     depends_on:
       rabbitmq:
         condition: service_healthy
@@ -175,11 +175,11 @@ services:
       - TX_QUEUE=threshold_evaluation_3
       - AVG_QUEUE=calculated_averages_3
       - OUTPUT_QUEUE=threshold_transactions_3
-  eof_tracker:
+  eof_tracker_r3:
     build:
       context: ./src/
       dockerfile: tracker/Dockerfile
-    container_name: eof_tracker
+    container_name: eof_tracker_r3
     depends_on:
       rabbitmq:
         condition: service_healthy
