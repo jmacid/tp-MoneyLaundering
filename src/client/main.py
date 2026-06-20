@@ -15,7 +15,7 @@ OUTPUT_FILE_LOWER_THAN_AVG = os.environ.get("OUTPUT_FILE_LOWER_THAN_AVG", "/outp
 OUTPUT_FILE_SCATTER_GATHER = os.environ.get("OUTPUT_FILE_SCATTER_GATHER", "/output/scatter_gather.csv")
 OUTPUT_FILE_AMOUNT_ACCOUNTS = os.environ.get("OUTPUT_FILE_AMOUNT_ACCOUNTS", "/output/amount_accounts.csv")
 
-ROW_LIMIT = 7500 #None
+ROW_LIMIT = 1000 #None
 
 class Client:
     def __init__(self):

@@ -3,11 +3,13 @@ PWD := $(shell pwd)
 
 up:
 	mkdir -p output
+	COMPOSE_HTTP_TIMEOUT=300 docker compose -f docker-compose.yaml build --no-cache
 	COMPOSE_HTTP_TIMEOUT=300 docker compose -f docker-compose.yaml up --build --remove-orphans --detach
 	docker compose -f docker-compose.yaml logs --follow
 .PHONY: up
 
 up-client:
+	docker compose -f docker-compose-client.yaml build --no-cache
 	docker compose -f docker-compose-client.yaml up
 .PHONY: up
 
