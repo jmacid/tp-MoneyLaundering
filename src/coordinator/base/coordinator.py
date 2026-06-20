@@ -333,7 +333,7 @@ class Coordinator:
         next_stage_id = self.nodes.get_next_stage_id(rule_id=request.rule_id, stage_id=request.stage_id)
 
         if next_stage_id is None:
-            logger.info("[PIPELINE_STAGE_FINAL] client_id=%s rule_id=%s stage_id=%s", request.client_id, request.rule_id, request.stage_id)
+            logger.info(magenta(f"[PIPELINE_STAGE_FINAL] client_id={request.client_id} rule_id={request.rule_id} stage_id={request.stage_id}"))
             return
 
         next_stage = Stage(client_id=request.client_id, rule_id=request.rule_id, stage_id=next_stage_id, expected_input=expected_input)
