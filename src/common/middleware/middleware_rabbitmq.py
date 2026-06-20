@@ -4,14 +4,14 @@ from .middleware import MessageMiddlewareQueue, MessageMiddlewareExchange
 class MessageMiddlewareQueueRabbitMQ(MessageMiddlewareQueue):
 
     def __init__(self, host, queue_name):
-        connection = pika.BlockingConnection(pika.ConnectionParameters(host))
-        self.ch = connection.channel()
+        self.connection = pika.BlockingConnection(pika.ConnectionParameters(host))
+        self.ch = self.connection.channel()
         self.queue_name = queue_name
         self.ch.queue_declare(queue=queue_name, durable=True, arguments={'x-queue-type': 'quorum'})
         self.ch.confirm_delivery()
 
     def close(self):
-        self.ch.close()
+        self.connection.close()
 
     def send(self, message):
         self.ch.basic_publish(exchange='',
@@ -40,8 +40,8 @@ class MessageMiddlewareQueueRabbitMQ(MessageMiddlewareQueue):
 class MessageMiddlewareExchangeRabbitMQ(MessageMiddlewareExchange):
     
     def __init__(self, host, exchange_name, routing_keys):
-        connection = pika.BlockingConnection(pika.ConnectionParameters(host))
-        self.ch = connection.channel()
+        self.connection = pika.BlockingConnection(pika.ConnectionParameters(host))
+        self.ch = self.connection.channel()
         self.exchange_name = exchange_name
         self.routing_keys = routing_keys
 
@@ -51,7 +51,7 @@ class MessageMiddlewareExchangeRabbitMQ(MessageMiddlewareExchange):
         self.ch.confirm_delivery()
 
     def close(self):
-        self.ch.close()
+        self.connection.close()
 
     def send(self, message):
         r_key = self.routing_keys[0] if self.routing_keys else ''

@@ -25,5 +25,6 @@ class AmountFilter(OperationStrategy):
 
         logging.info(f"transaction amount_paid: {transaction[self.amount_field]} - {self.minimum_amount}")
         if Decimal(transaction[self.amount_field]) < self.minimum_amount:
+            transaction["query"] = "query_1"
             return transaction
         return None

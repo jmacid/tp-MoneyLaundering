@@ -45,6 +45,7 @@ class ScatterGatherDetectorService:
             if scatter_gather_paths:
                 result = {
                     "client_id": client_id,
+                    "query": "query_4",
                     "scatter_gather_paths": scatter_gather_paths
                 }
                 logging.info(f"Scatter-Gather results para cliente {client_id[:8]}: {result}")

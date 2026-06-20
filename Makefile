@@ -25,15 +25,21 @@ RULE_4_ACTUAL ?= $(OUTPUT_DIR)/RULE_4_OUTPUT.csv
 RULE_5_ACTUAL ?= $(OUTPUT_DIR)/RULE_5_OUTPUT.csv
 
 up:
+	find output -mindepth 1 -delete
 	mkdir -p output
+	COMPOSE_HTTP_TIMEOUT=300 docker compose -f docker-compose.yaml build --no-cache
 	COMPOSE_HTTP_TIMEOUT=300 docker compose -f docker-compose.yaml up --build --remove-orphans --detach
 	docker compose -f docker-compose.yaml logs --follow
+.PHONY: up
+
+up-client:
+	docker compose -f docker-compose-client.yaml build --no-cache
+	docker compose -f docker-compose-client.yaml up
 .PHONY: up
 
 down:
 	docker compose -f docker-compose.yaml stop -t 5
 	docker compose -f docker-compose.yaml down -v
-	find output -mindepth 1 -delete
 .PHONY: down
 
 logs:
@@ -47,7 +53,7 @@ switch:
 	@echo "3) Regla 3 - Detección de transacción menores al promedio cálculado"
 	@echo "4) Regla 4 - Detección de patrón Scatter-Gather"
 	@echo "5) Regla 5 - Cantidad de transacciones por vía de pago"
-# 	@echo "6) Todas las reglas"
+	@echo "6) Todas las reglas"
 	@read -p "Selecciona uno [1-5]: " option;	\
 	cp ./scenarios/$${option}.yaml docker-compose.yaml
 .PHONY: switch

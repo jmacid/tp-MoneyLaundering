@@ -49,10 +49,12 @@ class PaymentMethodJoiner:
 
                 final_result = {
                     "client_id": client_id,
+                    "query": "query_5",
                     "counts": final_counts
                 }
 
                 self.output_queue.send(message_protocol.internal.serialize(final_result))
+                self.output_queue.send(message_protocol.internal.serialize([client_id]))
 
                 del self.total_counts_by_client[client_id]
                 del self.eof_count_by_client[client_id]
