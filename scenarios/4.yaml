@@ -78,11 +78,11 @@ services:
       - INPUT_QUEUE=transactions
       - OUTPUTS=minor_query,max_query,avg_query,scatter_gather_query,count_query
       - EOF_CONTROL_QUEUE=eof_control_queue_4
-  currency_filter_1:
+  currency_filter_r4_1:
     build:
       context: ./src/
       dockerfile: workers/worker/Dockerfile
-    container_name: currency_filter_1
+    container_name: currency_filter_r4_1
     depends_on:
       rabbitmq:
         condition: service_healthy
@@ -95,11 +95,11 @@ services:
       - OUTPUTS=USD_transactions_4
       - CURRENCY=US Dollar
       - EOF_CONTROL_QUEUE=eof_control_queue_4
-  currency_filter_2:
+  currency_filter_r4_2:
     build:
       context: ./src/
       dockerfile: workers/worker/Dockerfile
-    container_name: currency_filter_2
+    container_name: currency_filter_r4_2
     depends_on:
       rabbitmq:
         condition: service_healthy
@@ -112,11 +112,11 @@ services:
       - OUTPUTS=USD_transactions_4
       - CURRENCY=US Dollar
       - EOF_CONTROL_QUEUE=eof_control_queue_4
-  date_range_filter_1:
+  date_range_filter_r4_1:
     build:
       context: ./src/
       dockerfile: workers/worker/Dockerfile
-    container_name: date_range_filter_1
+    container_name: date_range_filter_r4_1
     depends_on:
       rabbitmq:
         condition: service_healthy
@@ -132,11 +132,11 @@ services:
       - START_DATE=2022-09-01T00:15:00
       - END_DATE=2022-09-01T00:30:00
       - EOF_CONTROL_QUEUE=eof_control_queue_4
-  date_range_filter_2:
+  date_range_filter_r4_2:
     build:
       context: ./src/
       dockerfile: workers/worker/Dockerfile
-    container_name: date_range_filter_2
+    container_name: date_range_filter_r4_2
     depends_on:
       rabbitmq:
         condition: service_healthy
@@ -152,11 +152,11 @@ services:
       - START_DATE=2022-09-01T00:15:00
       - END_DATE=2022-09-01T00:30:00
       - EOF_CONTROL_QUEUE=eof_control_queue_4
-  destination_filter_1:
+  destination_filter_r4_1:
     build:
       context: ./src/
       dockerfile: workers/worker/Dockerfile
-    container_name: destination_filter_1
+    container_name: destination_filter_r4_1
     depends_on:
       rabbitmq:
         condition: service_healthy
@@ -170,11 +170,11 @@ services:
       - OUTPUTS=bridge_account_shards_4
       - DESTINATION_ACC_REQUIRED=3
       - EOF_CONTROL_QUEUE=eof_control_queue_4
-  destination_filter_2:
+  destination_filter_r4_2:
     build:
       context: ./src/
       dockerfile: workers/worker/Dockerfile
-    container_name: destination_filter_2
+    container_name: destination_filter_r4_2
     depends_on:
       rabbitmq:
         condition: service_healthy
@@ -188,11 +188,11 @@ services:
       - OUTPUTS=bridge_account_shards_4
       - DESTINATION_ACC_REQUIRED=3
       - EOF_CONTROL_QUEUE=eof_control_queue_4
-  scatter_gather_detector_1:
+  scatter_gather_detector_r4_1:
     build:
       context: ./src/
       dockerfile: operations/scatter_gather/Dockerfile
-    container_name: scatter_gather_detector_1
+    container_name: scatter_gather_detector_r4_1
     depends_on:
       rabbitmq:
         condition: service_healthy
@@ -202,11 +202,11 @@ services:
       - INPUT_QUEUE=bridge_account_shards_4
       - OUTPUT_QUEUE=scatter_gather_accounts_4
       - EOF_CONTROL_QUEUE=eof_control_queue_4
-  eof_tracker:
+  eof_tracker_r4:
     build:
       context: ./src/
       dockerfile: tracker/Dockerfile
-    container_name: eof_tracker
+    container_name: eof_tracker_r4
     depends_on:
       rabbitmq:
         condition: service_healthy
