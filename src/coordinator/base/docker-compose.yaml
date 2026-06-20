@@ -30,6 +30,7 @@ services:
       NODE_TIMEOUT_SECONDS: 9999
       MONITOR_INTERVAL_SECONDS: 9999
       STATE_DB_PATH: /app/data/state.db
+      COORDINATOR_ID: 1
     volumes:
       - coordinator_data:/app/data
     restart: unless-stopped
@@ -49,6 +50,7 @@ services:
       NODE_TIMEOUT_SECONDS: 9999
       MONITOR_INTERVAL_SECONDS: 9999
       STATE_DB_PATH: /app/data/state.db
+      COORDINATOR_ID: 2
     volumes:
       - coordinator_data:/app/data
     restart: unless-stopped

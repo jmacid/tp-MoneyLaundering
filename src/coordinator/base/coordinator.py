@@ -8,6 +8,7 @@ import threading
 from typing import Any
 import time
 import signal
+from common.logging.color import blue, cyan, green, magenta, red, yellow
 from coordinator.messages.inbound import (
     HelloMessage,
     HeartbeatMessage,
@@ -31,18 +32,13 @@ from coordinator.storage.stage_storage import StageStorage
 from workers.consumers.queue_consumer import QueueConsumer
 from workers.publishers.queue_publisher import QueuePublisher
 
-GREEN = "\033[92m"
-YELLOW = "\033[93m"
-RED = "\033[91m"
-CYAN = "\033[96m"
-MAGENTA = "\033[95m"
-RESET = "\033[0m"
-
 LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO").upper()
 
-logging.basicConfig(level=logging.WARNING, format="%(asctime)s [%(levelname)s] %(name)s | %(message)s", stream=sys.stdout)
+logging.basicConfig(level=logging.WARNING, format="%(message)s | %(asctime)s", stream=sys.stdout)
 
-logger = logging.getLogger("coordinator")
+COORDINATOR_ID = os.getenv("COORDINATOR_ID", "main")
+
+logger = logging.getLogger(f"coordinator.{COORDINATOR_ID}")
 logger.setLevel(getattr(logging, LOG_LEVEL, logging.INFO))
 logger.propagate = True
 
@@ -93,7 +89,7 @@ class Coordinator:
         signal.signal(signal.SIGINT, self.request_shutdown)
 
         try:
-            logger.info("Coordinator %s is listening on queue: %s", self.id, COORDINATOR_QUEUE)
+            logger.info("%s", magenta(f"Coordinator {self.id} is listening on queue: {COORDINATOR_QUEUE}"))
 
             threading.Thread(target=self.request_retry_loop, daemon=True).start()
             threading.Thread(target=self.node_monitor_loop, daemon=True).start()
@@ -103,7 +99,7 @@ class Coordinator:
             logging.exception("Coordinator %s crashed", self.id)
             raise
         finally:
-            logger.info("Coordinator %s shutting down gracefully", self.id)
+            logger.info("%s", magenta(f"Coordinator {self.id} shutting down gracefully"))
 
             self.stop_event.set()
 
@@ -127,15 +123,7 @@ class Coordinator:
                     self.nodes.update_status(node.node_id, "DOWN")
 
                     last_seen_str = datetime.fromtimestamp(node.last_seen).strftime("%Y-%m-%d %H:%M:%S")
-                    logger.warning(
-                        "%s[NODE_DOWN]%s node_id=%s rule_id=%s stage_id=%s last_seen=%s",
-                        YELLOW,
-                        RESET,
-                        node.node_id,
-                        node.rule_id,
-                        node.stage_id,
-                        last_seen_str,
-                    )
+                    logger.warning("%s node_id=%s rule_id=%s stage_id=%s last_seen=%s", yellow("[NODE_DOWN]"), node.node_id, node.rule_id, node.stage_id, last_seen_str)
 
             except Exception:
                 logger.exception("[NODE_MONITOR_LOOP] unexpected error")
@@ -176,31 +164,32 @@ class Coordinator:
     def handle_hello(self, message: HelloMessage) -> None:
 
         node = Node.from_hello(message)
-        logger.info("[HELLO] received from node=%s rule=%s stage=%s", node.node_id, node.rule_id, node.stage_id)
+        logger.info("%s received from node=%s rule=%s stage=%s", green("[HELLO]"), node.node_id, node.rule_id, node.stage_id)
 
         self.nodes.save(node)
         welcome = WelcomeMessage(heartbeat_interval=HEARTBEAT_INTERVAL, heartbeat_timeout=NODE_TIMEOUT_SECONDS)
         self.publisher.publish(node.control_queue, welcome.to_dict())
-        logger.info("[WELCOME] sent to node=%s", node.node_id)
+        logger.info("%s sent to node=%s", blue("[WELCOME]"), node.node_id)
 
     def handle_heartbeat(self, message: HeartbeatMessage) -> None:
 
-        #logger.info("[HEARTBEAT] received from node=%s", message.node_id)
+        logger.info("%s received from node=%s", green("[HEARTBEAT]"), message.node_id)
         self.nodes.touch(message.node_id)
 
     def handle_goodbye(self, message: GoodbyeMessage) -> None:
 
-        logger.info("[GOODBYE] received from node=%s", message.node_id)
+        logger.info("%s received from node=%s", green("[GOODBYE]"), message.node_id)
         self.nodes.stop(message.node_id)
 
     def handle_client_input_completed(self, message: ClientInputCompletedMessage) -> None:
 
-        logger.info("[CLIENT_INPUT_COMPLETED] stage received for client_id=%s expected_input=%s", message.client_id, message.expected_input)
+        logger.info("%s stage received for client_id=%s expected_input=%s", green("[CLIENT_INPUT_COMPLETED]"), message.client_id, message.expected_input)
         self.client_inputs.save(ClientInput(client_id=message.client_id, expected_input=message.expected_input))
 
     def handle_stage_eof_detected(self, message: StageEofDetectedMessage) -> None:
         """Create an EOF coordination request when a stage reaches EOF."""
 
+        logger.info("%s received in rule_id=%s stage_id=%s", green("[STAGE_EOF_DETECTED]"), message.rule_id, message.stage_id)
         stage = self.stages.get(message.client_id, message.rule_id, message.stage_id)
 
         if stage is None:
@@ -209,12 +198,7 @@ class Coordinator:
             expected_input = stage.expected_input
 
         if expected_input is None:
-            logging.warning(
-                "[EOF_DETECTED_IGNORED] client_id=%s rule_id=%s stage_id=%s reason=expected_input_not_found",
-                message.client_id,
-                message.rule_id,
-                message.stage_id,
-            )
+            logging.warning("%s client_id=%s rule_id=%s stage_id=%s reason=expected_input_not_found", red("[EOF_DETECTED_IGNORED]"), message.client_id, message.rule_id, message.stage_id)
             return
 
         stage = Stage(client_id=message.client_id, rule_id=message.rule_id, stage_id=message.stage_id, expected_input=expected_input)
@@ -228,12 +212,7 @@ class Coordinator:
         active_nodes = self.nodes.find_by_stage(rule_id=stage.rule_id, stage_id=stage.stage_id, status="ACTIVE")
 
         if not active_nodes:
-            logging.warning(
-                "[EOF_REQUEST_NOT_CREATED] client_id=%s rule_id=%s stage_id=%s reason=no_active_nodes",
-                stage.client_id,
-                stage.rule_id,
-                stage.stage_id,
-            )
+            logging.warning("%s client_id=%s rule_id=%s stage_id=%s reason=no_active_nodes", red("[EOF_REQUEST_NOT_CREATED]"), stage.client_id, stage.rule_id, stage.stage_id)
             return
 
         request = Request(
@@ -249,46 +228,30 @@ class Coordinator:
         created_request = self.requests.create_if_absent(request)
 
         if created_request is None:
-            logging.info("[EOF_REQUEST_ALREADY_EXISTS] client_id=%s rule_id=%s stage_id=%s", stage.client_id, stage.rule_id, stage.stage_id)
+            logger.info("%s client_id=%s rule_id=%s stage_id=%s", red("[EOF_REQUEST_ALREADY_EXISTS]"), stage.client_id, stage.rule_id, stage.stage_id)
             return
 
-        self.send_eof_report_request(created_request, active_nodes)
+        logger.info("%s request_id=%s client_id=%s rule_id=%s stage_id=%s expected_input=%s expected_nodes=%i", cyan("[EOF_REQUEST_CREATED]"), created_request.request_id, created_request.client_id, created_request.rule_id, created_request.stage_id, created_request.expected_input, len(created_request.expected_nodes))
 
-        logging.info(
-            "[EOF_REQUEST_CREATED] request_id=%s client_id=%s rule_id=%s stage_id=%s " "expected_input=%s expected_nodes=%s",
-            created_request.request_id,
-            created_request.client_id,
-            created_request.rule_id,
-            created_request.stage_id,
-            created_request.expected_input,
-            sorted(created_request.expected_nodes),
-        )
+        self.send_eof_report_request(created_request, active_nodes)
 
     def handle_report(self, message: ReportMessage) -> None:
         """Handle an EOF report sent by a worker node.
 
         Stores the report idempotently and tries to close the EOF request.
         """
-
-        report = Report(
-            request_id=message.request_id,
+        report = Report(request_id=message.request_id,
             client_id=message.client_id,
             node_id=message.node_id,
             processed=message.processed,
             emitted=message.emitted,
         )
 
+        logger.info("%s request_id=%s client_id=%s " "node_id=%s processed=%s emitted=%s", green("[EOF_REPORT_RECEIVED]"), report.request_id, report.client_id, report.node_id, report.processed, report.emitted)
+
         self.reports.save(report)
         self.try_close_request(report.request_id)
 
-        logger.info(
-            "[EOF_REPORT_RECEIVED] request_id=%s client_id=%s " "node_id=%s processed=%s emitted=%s",
-            report.request_id,
-            report.client_id,
-            report.node_id,
-            report.processed,
-            report.emitted,
-        )
 
     def release_client(self, request: Request) -> None:
         """Tell all expected active nodes that the client can be released."""
@@ -305,18 +268,12 @@ class Coordinator:
                 continue
 
             self.publisher.publish(node.control_queue, message.to_dict())
-
-            logger.info(
-                "[RELEASE_CLIENT_SENT] request_id=%s client_id=%s node_id=%s queue=%s",
-                request.request_id,
-                request.client_id,
-                node.node_id,
-                node.control_queue,
-            )
+            logger.info("%s request_id=%s client_id=%s node_id=%s queue=%s", magenta("[RELEASE_CLIENT_SENT]"), request.request_id, request.client_id, node.node_id, node.control_queue,)
 
     def try_close_request(self, request_id: str) -> None:
         """Close an EOF request if all expected reports have been received."""
 
+        logging.warning("%s request_id=%s reason=request_not_found", yellow("Trying to close request"), request_id)
         request = self.requests.get(request_id)
 
         if request is None:
@@ -380,16 +337,8 @@ class Coordinator:
             return
 
         next_stage = Stage(client_id=request.client_id, rule_id=request.rule_id, stage_id=next_stage_id, expected_input=expected_input)
-
         self.stages.save(next_stage)
-
-        logger.info(
-            "[NEXT_STAGE_CREATED] client_id=%s rule_id=%s stage_id=%s expected_input=%s",
-            next_stage.client_id,
-            next_stage.rule_id,
-            next_stage.stage_id,
-            next_stage.expected_input,
-        )
+        logger.info("%s client_id=%s rule_id=%s stage_id=%s expected_input=%s", cyan("[NEXT_STAGE_CREATED]"), next_stage.client_id, next_stage.rule_id, next_stage.stage_id, next_stage.expected_input)
 
     def request_retry_loop(self) -> None:
         """Retry EOF report requests for WAITING requests."""
@@ -455,14 +404,7 @@ class Coordinator:
 
         for node in nodes.values():
             self.publisher.publish(node.control_queue, message.to_dict())
-
-            logger.info(
-                "[EOF_REPORT_REQUEST_SENT] request_id=%s client_id=%s node_id=%s queue=%s",
-                request.request_id,
-                request.client_id,
-                node.node_id,
-                node.control_queue,
-            )
+            logger.info("%s request_id=%s client_id=%s node_id=%s queue=%s", blue("[EOF_REPORT_REQUEST_SENT]"), request.request_id, request.client_id, node.node_id, node.control_queue)
 
     @staticmethod
     def required(event: dict[str, Any], key: str) -> Any:
