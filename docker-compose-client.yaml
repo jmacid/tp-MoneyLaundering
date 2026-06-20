@@ -8,11 +8,11 @@ services:
     - INPUT_FILE=/datasets/HI-Small_Trans.csv
     - SERVER_HOST=gateway
     - SERVER_PORT=5678
-    - OUTPUT_FILE_MINOR_RESULT=/output/client_1_minor_result.csv
-    - OUTPUT_FILE_MAX_PER_BANK=/output/client_1_max_per_bank.csv
-    - OUTPUT_FILE_LOWER_THAN_AVG=/output/client_1_lower_than_avg.csv
-    - OUTPUT_FILE_SCATTER_GATHER=/output/client_1_scatter_gather.csv
-    - OUTPUT_FILE_AMOUNT_ACCOUNTS=/output/client_1_amount_accounts.csv
+    - OUTPUT_FILE_MINOR_RESULT=/output/1_client_1_minor_result.csv
+    - OUTPUT_FILE_MAX_PER_BANK=/output/2_client_1_max_per_bank.csv
+    - OUTPUT_FILE_LOWER_THAN_AVG=/output/3_client_1_lower_than_avg.csv
+    - OUTPUT_FILE_SCATTER_GATHER=/output/4_client_1_scatter_gather.csv
+    - OUTPUT_FILE_AMOUNT_ACCOUNTS=/output/5_client_1_amount_accounts.csv
     volumes:
     - ./datasets:/datasets
     - ./output:/output

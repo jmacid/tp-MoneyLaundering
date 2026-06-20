@@ -90,7 +90,7 @@ services:
       - RABBITMQ_HOST=rabbitmq
       - OPERATION_TYPE=currency_filter
       - INPUT_MIDDLEWARE_TYPE=queue
-      - INPUT_QUEUE=minor_query
+      - INPUT_QUEUE=scatter_gather_query
       - OUTPUT_MIDDLEWARE_TYPE=queue
       - OUTPUTS=USD_transactions_4
       - CURRENCY=US Dollar
@@ -107,7 +107,7 @@ services:
       - RABBITMQ_HOST=rabbitmq
       - OPERATION_TYPE=currency_filter
       - INPUT_MIDDLEWARE_TYPE=queue
-      - INPUT_QUEUE=minor_query
+      - INPUT_QUEUE=scatter_gather_query
       - OUTPUT_MIDDLEWARE_TYPE=queue
       - OUTPUTS=USD_transactions_4
       - CURRENCY=US Dollar
