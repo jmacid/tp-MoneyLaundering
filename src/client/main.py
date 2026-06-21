@@ -8,9 +8,10 @@ import threading
 import socket
 import time
 import select
-from common import message_protocol
+from src.common import message_protocol
 from src.common.message_protocol.pending_batches_table import PendingBatchesTable
 from src.common.message_protocol.batch_spliter import build_batches
+from src.common.message_protocol.message_handler import MessageHandler
 
 SERVER_HOST = os.environ["SERVER_HOST"]
 SERVER_PORT = int(os.environ["SERVER_PORT"])
@@ -22,7 +23,7 @@ ACK_TIMEOUT_SECONDS = float(os.getenv("ACK_TIMEOUT_SECONDS", "5.0"))
 MAX_RETRIES = int(os.getenv("MAX_RETRIES", "3"))
 
 EXPECTED_EOFS = int(os.getenv("EXPECTED_EOFS", "5"))
-CLIENT_ID = os.getenv("CLIENT_ID")
+CLIENT_ID = os.getenv("CLIENT_ID", "anonymous_client")
 
 
 class Client:
@@ -57,13 +58,11 @@ class Client:
     
     def send_transaction_records(self, input_file):
         logging.info(f"[send_transaction_records] input_file: {input_file}")
-        logging.info(f"[send_transaction_records] file exists: {os.path.exists(input_file)}")
         pending = PendingBatchesTable()
-        eof_acked = threading.Event() 
 
         receiver_thread = threading.Thread(
             target=self._receiver_loop,
-            args=(pending, self._stop_event, eof_acked)
+            args=(pending, self._stop_event) 
         )
         receiver_thread.start()
 
@@ -73,19 +72,20 @@ class Client:
             self._retry_expired(pending)
             time.sleep(0.1)
 
-        while not eof_acked.is_set():
-            message_protocol.external.send_msg(
-                self.server_socket,
-                message_protocol.external.MsgType.END_OF_RECORDS
-            )
-            logging.info("[send_transaction_records] END_OF_RECORDS sended, waiting ACK")
-            eof_acked.wait(timeout=ACK_TIMEOUT_SECONDS)
-
-        logging.info("[send_transaction_records] EOF confirmed by the gateway")
+        logging.info("[send_transaction_records] All batches (including the last one) confirmed by the gateway")
+        
+        self._stop_event.set() 
         receiver_thread.join()
 
+        if self.output_file_minor_result is not None:
+            self.output_file_minor_result.close()
+            self.output_file_minor_result = None 
+            logging.info("[send_transaction_records] Output file closed successfully")
+
     def _sender_loop(self, input_file: str, pending: PendingBatchesTable):
-        for batch in build_batches(input_file, self.client_id):
+        message_handler = MessageHandler(self.client_id)
+
+        for batch in build_batches(input_file, self.client_id, message_handler):
 
             while pending.is_full():
                 self._retry_expired(pending)
@@ -124,12 +124,15 @@ class Client:
             pending.increment_retries(p.batch.sequence_number)
 
 
-    def _receiver_loop(self, pending, stop_event, eof_acked):
-        eofs_received = 0
+    def _receiver_loop(self, pending, stop_event):
         while not stop_event.is_set():
             ready, _, _ = select.select([self.server_socket], [], [], 0.1)
             if not ready:
                 continue
+
+            if self.server_socket is None:
+                break
+
             try:
                 msg_type, msg_payload = message_protocol.external.recv_msg(self.server_socket)
             except IncompleteReadError:
@@ -144,21 +147,9 @@ class Client:
                 pending.remove(sequence_number)
                 logging.info(f"[_receiver_loop] ACK received for batch {sequence_number}")
 
-            elif msg_type == message_protocol.external.MsgType.ACK_EOF:
-                logging.info("[_receiver_loop] ACK_EOF received")
-                eof_acked.set()
-
             elif msg_type == message_protocol.external.MsgType.MINOR_RESULT:
                 self._save_minor_result(msg_payload)
-
-            elif msg_type == message_protocol.external.MsgType.END_OF_RECORDS:
-                eofs_received += 1
-                logging.info(f"[_receiver_loop] EOF received ({eofs_received}/{EXPECTED_EOFS})")
-                if eofs_received >= EXPECTED_EOFS:
-                    logging.info("[_receiver_loop] All EOFs received")
-                    if self.output_file_minor_result is not None:
-                        self.output_file_minor_result.close()
-                    return
+                
 
     def _save_minor_result(self, msg_payload):
         logging.info(f"result: {msg_payload}")

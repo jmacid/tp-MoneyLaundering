@@ -2,8 +2,7 @@ import logging
 import os
 from typing import Any
 from operations.core.operation_strategy import OperationStrategy
-from shared.validators.transaction_validator import TransactionValidator
-from common.message_protocol.transaction_batch import TransactionBatch
+from common.message_protocol.batch import Batch
 
 class CurrencyFilter(OperationStrategy):
 
@@ -15,17 +14,18 @@ class CurrencyFilter(OperationStrategy):
         
         self.required_fields = ["payment_currency", "receiving_currency"]
 
-    def process(self, batch: TransactionBatch) -> TransactionBatch | None:
+    def process(self, batch: Batch) -> Batch | None:
 
         filtered = [
             t for t in batch.lines
             if t["payment_currency"] == self.currency or
             t["receiving_currency"] == self.currency
         ]
+        
         if not filtered and not batch.is_last:
             return None
         
-        return TransactionBatch(
+        return Batch(
             sequence_number=batch.sequence_number, 
             lines=filtered, 
             is_last=batch.is_last, 

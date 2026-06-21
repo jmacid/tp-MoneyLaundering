@@ -11,7 +11,7 @@ AGGREGATION_AMOUNT = int(os.environ.get("AGGREGATION_AMOUNT", "1"))
 
 class AverageJoiner:
     def __init__(self):
-        self.input_exchange = middleware.MessageMiddlewareExchangeRabbitMQ(MOM_HOST, INPUT_EXCHANGE, [f"{INPUT_EXCHANGE}_{ID}"])
+        self.input_exchange = middleware.MessageMiddlewareExchangeDirectRabbitMQ(MOM_HOST, INPUT_EXCHANGE, [f"{INPUT_EXCHANGE}_{ID}"])
         self.output_queue = middleware.MessageMiddlewareQueueRabbitMQ(MOM_HOST, OUTPUT_QUEUE)
         self.total_averages_by_client = {}
         self.eof_count_by_client = {}

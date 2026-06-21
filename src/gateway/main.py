@@ -4,10 +4,8 @@ import socket
 import signal
 import multiprocessing
 from common import middleware, message_protocol
-from gateway.message_handler import MessageHandler
-from common.message_protocol.transaction_batch import TransactionBatch
+from common.message_protocol.message_handler import MessageHandler
 import uuid
-import json
 
 SERVER_HOST = os.environ["SERVER_HOST"]
 SERVER_PORT = int(os.environ["SERVER_PORT"])
@@ -30,7 +28,6 @@ def _handle_bank_mapping(batch, resolver_exchange):
 
 def handle_client_request(client_socket, message_handler):
     output_queue = middleware.MessageMiddlewareQueueRabbitMQ(MOM_HOST, OUTPUT_QUEUE)
-    control_queue = middleware.MessageMiddlewareQueueRabbitMQ(MOM_HOST, EOF_CONTROL_QUEUE)
     resolver_exchange = middleware.MessageMiddlewareExchangeFanoutRabbitMQ(MOM_HOST, RESOLVER_EXCHANGE )
     transactions_sent = 0
     try:
@@ -39,19 +36,17 @@ def handle_client_request(client_socket, message_handler):
             logging.info(f"[handle_client_request] Message received type {msg_type}")
             
             if msg_type == message_protocol.external.MsgType.BATCH_RECORD:
-                transaction_batch = TransactionBatch(
-                    sequence_number=batch.sequence_number,
-                    lines=[message_handler.serialize_data_message(line) for line in batch.lines],
-                    is_last=False,
-                    client_id=message_handler.client_id
-                )
-                output_queue.send(message_protocol.internal.serialize(transaction_batch.to_dict()))
-                transactions_sent += len(transaction_batch.lines)
+                output_queue.send(message_protocol.internal.serialize(batch.to_dict()))
+                transactions_sent += len(batch.lines)
                 message_protocol.external.send_msg(
                     client_socket,
                     message_protocol.external.MsgType.ACK,
                     batch.sequence_number
                 )
+
+                if batch.is_last:
+                    logging.info(f"[handle_client_request] Last batch received, total transactions sent: {transactions_sent}")
+                    break
 
             elif msg_type == message_protocol.external.MsgType.BANK_MAPPING:
                 logging.info(f"[handle_client_request] BANK_MAPPING received")
@@ -62,27 +57,12 @@ def handle_client_request(client_socket, message_handler):
                     batch.sequence_number
                 )
 
-            elif msg_type == message_protocol.external.MsgType.END_OF_RECORDS:
-                logging.info(f"[handle_client_request] END_OF_RECORDS received")
-                eof_msg = json.dumps({
-                    "client_id": message_handler.client_id,
-                    "node": "gateway",
-                    "emitted": transactions_sent
-                })
-                control_queue.send(eof_msg.encode('utf-8'))
-                message_protocol.external.send_msg(
-                    client_socket,
-                    message_protocol.external.MsgType.ACK_EOF
-                )
-                return
-
     except socket.error:
         logging.error("[handle_client_request] The connection with the server was lost")
     except Exception as e:
         logging.error(f"[handle_client_request] {e}")
     finally:
         output_queue.close()
-        control_queue.close()
         resolver_exchange.close()
 
 def handle_client_response(client_list):
@@ -92,37 +72,50 @@ def handle_client_response(client_list):
 
     def _consume_result(message, ack, nack):
         try:
+            # 1. Deserializamos el payload interno (que viene como dict desde el to_dict() del Batch)
             fields = message_protocol.internal.deserialize(message)
 
-            if fields["is_last"] and not fields["lines"]:
-                target_client_id = fields["client_id"]
-                logging.info(f"Gateway received EOF for client {target_client_id[:8]}. Sending to client...")
-
-                for idx, client_data in enumerate(client_list):
-                    if client_data[0] == target_client_id:
-                        target_socket = client_data[2]
-                        message_protocol.external.send_msg(target_socket, message_protocol.external.MsgType.END_OF_RECORDS)
-                        client_list.pop(idx) 
-                        break
-                ack()
-                return
-
             if not isinstance(fields, dict) or "client_id" not in fields:
+                logging.warning("[_consume_result] Invalid message format received")
                 ack()
                 return
 
-            tb = message_protocol.internal.deserialize(message)  
-            target_client_id = tb["client_id"]
+            target_client_id = fields["client_id"]
+            lines_to_send = fields.get("lines", [])
+            is_last = fields.get("is_last", False)
 
-            for client_data in client_list:
+            # 2. Buscamos el socket del cliente en la lista
+            target_socket = None
+            client_idx = -1
+            
+            for idx, client_data in enumerate(client_list):
                 if client_data[0] == target_client_id:
+                    target_client_id = client_data[0]
                     target_socket = client_data[2]
-                    message_protocol.external.send_msg(
-                        target_socket,
-                        message_protocol.external.MsgType.MINOR_RESULT,
-                        tb["lines"],
-                    )
+                    client_idx = idx
                     break
+
+            if target_socket is None:
+                logging.warning(f"[_consume_result] Client socket not found for client_id {target_client_id[:8]}")
+                ack()
+                return
+
+            # 3. Si el lote tiene líneas (aunque sea el último), se las enviamos al cliente
+            if lines_to_send:
+                message_protocol.external.send_msg(
+                    target_socket,
+                    message_protocol.external.MsgType.MINOR_RESULT,
+                    lines_to_send,
+                )
+                logging.info(f"[_consume_result] Sent {len(lines_to_send)} results to client {target_client_id[:8]}")
+
+            # 4. Si es el último lote del pipeline, limpiamos el socket del cliente
+            if is_last:
+                logging.info(f"[_consume_result] Last batch of results processed for client {target_client_id[:8]}. Closing context.")
+                # Sacamos al cliente de la lista para liberar el slot
+                client_list.pop(client_idx)
+                # Opcional: Aquí podrías cerrar el socket si el Gateway es el dueño del ciclo de vida del mismo,
+                # pero como handle_client_request también lo usa, usualmente se cierra allá o al terminar el proceso.
 
             ack()
         except Exception as e:

@@ -1,7 +1,7 @@
 import threading
 import time
-from batch import Batch
-from pending_batch import PendingBatch
+from .batch import Batch
+from .pending_batch import PendingBatch
 import os
 
 MAX_RETRIES = int(os.getenv("MAX_RETRIES", "3"))

@@ -11,8 +11,8 @@ from workers.dispatchers.broadcast_dispatcher import BroadcastDispatcher
 from workers.dispatchers.bank_dispatcher import BankDispatcher
 import json
 from common import middleware
-from common import message_protocol
-from common.message_protocol.transaction_batch import TransactionBatch
+from common.message_protocol.message_handler import MessageHandler
+from common.message_protocol.batch import Batch
 
 ALLOWED_OPERATIONS = ["currency_filter","amount_filter","date_range_filter","payment_method_filter",
                       "payment_method_counter","currency_normalizer", "projection_dispatcher","bank_dispatcher",
@@ -95,24 +95,28 @@ def main():
 
     def handle_message(message):
         raw_dict = message
-        transaction_batch = TransactionBatch(
+        
+        transaction_batch = Batch(
             sequence_number=raw_dict["sequence_number"],
             lines=raw_dict["lines"],
-            is_last=raw_dict["is_last"],
+            is_last=bool(raw_dict["is_last"]),
             client_id=raw_dict["client_id"]
         )
 
+        # 2. Se procesa directo en la operación (Filter, Projector, etc.)
         result = operation.process(transaction_batch)
         
         if result is not None:
             logging.info(f"Processed transaction result: {result}")
 
+        # 3. Despachamos el resultado (que sigue siendo un Batch con list[dict])
         if result is not None and dispatcher is not None:
-            if isinstance(result, TransactionBatch):
-                dispatcher.process([result.lines], original=result)
+            if isinstance(result, Batch):
+                dispatcher.process([result.to_dict()])
             else:
-                dispatcher.process([result], original=transaction_batch)
+                dispatcher.process([result])
             
+        # 5. Lógica de métricas para el eof_tracker
         if isinstance(operation, ProjectionDispatcher):
             emitted_count = 1
         else:

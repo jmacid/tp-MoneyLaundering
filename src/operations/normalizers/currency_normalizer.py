@@ -7,6 +7,7 @@ from typing import Any
 from domain.exchange_rate import ExchangeRate
 from operations.core.operation_strategy import OperationStrategy
 from shared.validators.transaction_validator import TransactionValidator
+from common.message_protocol.transaction_batch import TransactionBatch
 
 mapped_tag_currencies = {
     "US Dollar": "USD",
@@ -21,7 +22,7 @@ class CurrencyNormalizer(OperationStrategy):
             raise ValueError("Missing TARGET_CURRENCY")
 
         self.exchange_rates: dict[tuple[str, str, object], ExchangeRate] = {}
-        self.required_fields = {"client_id", "timestamp","amount_paid","payment_currency","amount_received","receiving_currency"}
+        self.required_fields = ["client_id", "timestamp", "amount_paid", "payment_currency", "amount_received", "receiving_currency"]
 
     def load_exchange_rate(self, exchange_rate: ExchangeRate) -> None:
         key = (
@@ -29,19 +30,15 @@ class CurrencyNormalizer(OperationStrategy):
             exchange_rate.to_currency,
             exchange_rate.rate_date,
         )
-
         self.exchange_rates[key] = exchange_rate
 
     def normalize_amount(self, amount: Decimal, from_currency: str, rate_date) -> Decimal:
-
         currency_tag = mapped_tag_currencies.get(from_currency, from_currency)
         if currency_tag == self.target_currency:
             return amount
 
         logging.info(f"###############  MONEDA DIFERENTE {currency_tag}")
         key = (currency_tag, self.target_currency, rate_date)
-
-        exchange_rate = self.exchange_rates.get(key)
 
         if key not in self.exchange_rates:
             date_str = rate_date.strftime('%Y-%m-%d')
@@ -61,35 +58,52 @@ class CurrencyNormalizer(OperationStrategy):
                 raise ValueError(f"Fallo al obtener exchange rate para {currency_tag} -> {self.target_currency} en {rate_date}: {e}")
 
         exchange_rate = self.exchange_rates[key]
-        # logging.info(f"Conversion: {amount} * {exchange_rate.rate} = {amount * exchange_rate.rate}")
         return amount * exchange_rate.rate
 
-    def process(self, transaction: dict[str, Any]) -> dict[str, Any] | None:
+    def process(self, batch: TransactionBatch) -> TransactionBatch | None:
+        processed_lines = []
 
-        TransactionValidator.validate_required_fields(transaction, self.required_fields)
+        for transaction in batch.lines:
+            TransactionValidator.validate_required_fields(transaction, self.required_fields)
 
-        try:
-            timestamp = datetime.strptime(transaction["timestamp"], "%Y/%m/%d %H:%M")
-            rate_date = timestamp.date()
-        except ValueError:
-            logging.error(f"Date conversion failed: {timestamp}")
-            rate_date = datetime.fromisoformat(transaction["timestamp"]).date()
+            try:
+                try:
+                    timestamp = datetime.strptime(transaction["timestamp"], "%Y/%m/%d %H:%M")
+                    rate_date = timestamp.date()
+                except ValueError:
+                    logging.error(f"Date conversion failed for format '%Y/%m/%d %H:%M', trying isoformat")
+                    rate_date = datetime.fromisoformat(transaction["timestamp"]).date()
 
-        normalized_paid_amount = self.normalize_amount(
-            amount=Decimal(str(transaction["amount_paid"])),
-            from_currency=transaction["payment_currency"],
-            rate_date=rate_date,
+                normalized_paid_amount = self.normalize_amount(
+                    amount=Decimal(str(transaction["amount_paid"])),
+                    from_currency=transaction["payment_currency"],
+                    rate_date=rate_date,
+                )
+
+                normalized_received_amount = self.normalize_amount(
+                    amount=Decimal(str(transaction["amount_received"])),
+                    from_currency=transaction["receiving_currency"],
+                    rate_date=rate_date,
+                )
+
+                updated_transaction = {
+                    **transaction,
+                    "normalized_amount_paid": float(normalized_paid_amount), 
+                    "normalized_amount_received": float(normalized_received_amount),
+                    "normalized_currency": self.target_currency,
+                }
+                processed_lines.append(updated_transaction)
+
+            except Exception as e:
+                logging.error(f"Error processing currency normalization for transaction: {e}")
+                continue
+
+        if not processed_lines and not batch.is_last:
+            return None
+
+        return TransactionBatch(
+            sequence_number=batch.sequence_number,
+            lines=processed_lines,
+            is_last=batch.is_last,
+            client_id=batch.client_id
         )
-
-        normalized_received_amount = self.normalize_amount(
-            amount=Decimal(str(transaction["amount_received"])),
-            from_currency=transaction["receiving_currency"],
-            rate_date=rate_date,
-        )
-
-        return {
-            **transaction,
-            "normalized_amount_paid": float(normalized_paid_amount), 
-            "normalized_amount_received": float(normalized_received_amount),
-            "normalized_currency": self.target_currency,
-        }

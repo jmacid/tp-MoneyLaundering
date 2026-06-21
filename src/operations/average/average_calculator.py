@@ -5,6 +5,7 @@ import os
 from typing import Any
 from operations.core.operation_strategy import OperationStrategy
 from shared.validators.transaction_validator import TransactionValidator
+from common.message_protocol.transaction_batch import TransactionBatch
 
 class AverageCalculator(OperationStrategy):
 
@@ -15,19 +16,32 @@ class AverageCalculator(OperationStrategy):
             raise ValueError("Missing environment variable: AVERAGE_GROUP_BY")
 
         self.avg_group = (group_by or group_by_raw)
-        self.required_fields = {self.avg_group, "amount_paid", "client_id"}
+        self.required_fields = [self.avg_group, "amount_paid", "client_id"]
 
         self.stats: dict[str, dict[str, dict[str, Decimal | int]]] = defaultdict(
             lambda: defaultdict(lambda: {"count": 0, "sum": Decimal("0")})
         )
 
-    def process(self, transaction: dict[str, Any]) -> dict[str, Any] | None:
-        TransactionValidator.validate_required_fields(transaction, self.required_fields)
+    def process(self, batch: TransactionBatch) -> TransactionBatch | None:
+        processed_lines = []
 
-        client_id = transaction["client_id"]
-        grouped_by = transaction[self.avg_group]
+        for transaction in batch.lines:
+            TransactionValidator.validate_required_fields(transaction, self.required_fields)
 
-        self.stats[client_id][grouped_by]["count"] += 1
-        self.stats[client_id][grouped_by]["sum"] += Decimal(str(transaction["amount_paid"]))
+            client_id = transaction["client_id"]
+            grouped_by = transaction[self.avg_group]
 
-        return None
+            self.stats[client_id][grouped_by]["count"] += 1
+            self.stats[client_id][grouped_by]["sum"] += Decimal(str(transaction["amount_paid"]))
+
+            processed_lines.append(transaction)
+            
+        if not processed_lines and not batch.is_last:
+            return None
+
+        return TransactionBatch(
+            sequence_number=batch.sequence_number,
+            lines=processed_lines,
+            is_last=batch.is_last,
+            client_id=batch.client_id
+        )

@@ -20,17 +20,17 @@ class PaymentMethodCounter:
             MOM_HOST, INPUT_QUEUE
         )
 
-        self.control_exchange_consumer = middleware.MessageMiddlewareExchangeRabbitMQ(
+        self.control_exchange_consumer = middleware.MessageMiddlewareExchangeDirectRabbitMQ(
             MOM_HOST, CONTROL_EXCHANGE, [CONTROL_EXCHANGE]
         )
 
-        self.control_exchange_publisher = middleware.MessageMiddlewareExchangeRabbitMQ(
+        self.control_exchange_publisher = middleware.MessageMiddlewareExchangeDirectRabbitMQ(
             MOM_HOST, CONTROL_EXCHANGE, [CONTROL_EXCHANGE]
         )
 
         self.data_output_exchanges = []
         for i in range(AGGREGATION_AMOUNT):
-            data_output_exchange = middleware.MessageMiddlewareExchangeRabbitMQ(
+            data_output_exchange = middleware.MessageMiddlewareExchangeDirectRabbitMQ(
                 MOM_HOST, AGGREGATION_PREFIX, [f"{AGGREGATION_PREFIX}_{i}"]
             )
             self.data_output_exchanges.append(data_output_exchange)

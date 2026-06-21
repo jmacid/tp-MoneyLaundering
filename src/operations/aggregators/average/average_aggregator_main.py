@@ -13,9 +13,9 @@ JOINERS_COUNT = int(os.environ.get("JOINERS_COUNT", "1"))
 
 class AverageAggregator:
     def __init__(self):
-        self.input_exchange = middleware.MessageMiddlewareExchangeRabbitMQ(MOM_HOST, INPUT_EXCHANGE, [f"{INPUT_EXCHANGE}_{ID}"])
+        self.input_exchange = middleware.MessageMiddlewareExchangeDirectRabbitMQ(MOM_HOST, INPUT_EXCHANGE, [f"{INPUT_EXCHANGE}_{ID}"])
         self.data_output_exchanges = [
-            middleware.MessageMiddlewareExchangeRabbitMQ(MOM_HOST, OUTPUT_EXCHANGE, [f"{OUTPUT_EXCHANGE}_{i}"])
+            middleware.MessageMiddlewareExchangeDirectRabbitMQ(MOM_HOST, OUTPUT_EXCHANGE, [f"{OUTPUT_EXCHANGE}_{i}"])
             for i in range(JOINERS_COUNT)
         ]
         self.averages_by_client = {}

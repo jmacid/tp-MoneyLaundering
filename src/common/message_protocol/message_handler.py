@@ -5,7 +5,7 @@ class MessageHandler:
     def __init__(self, client_id: str):
         self.client_id = client_id
     
-    def serialize_data_message(self, line: str) -> bytes:
+    def serialize_data_message(self, line: str) -> dict:
         fields = line.strip().split(',')
         [timestamp, from_bank, from_account, to_bank, to_account,
         amount_received, receiving_currency, amount_paid,
@@ -25,7 +25,7 @@ class MessageHandler:
             "payment_format": payment_format,
             "is_laundering": is_laundering == 'True'
         }
-        return message_protocol.internal.serialize(transaction_dict)
+        return transaction_dict
 
     def serialize_eof_message(self, message):
         return message_protocol.internal.serialize([self.client_id])
