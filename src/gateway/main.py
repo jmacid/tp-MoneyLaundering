@@ -10,7 +10,7 @@ import uuid
 import json
 import csv
 
-from shared.coordinator_client.coordinator_client import CoordinatorClient
+from shared.coordinator_client.gateway_coordination_client import GatewayCoordinatorClient
 
 SERVER_HOST = os.environ["SERVER_HOST"]
 SERVER_PORT = int(os.environ["SERVER_PORT"])
@@ -46,15 +46,21 @@ def load_bank_mapping(file_path):
 
 
 def handle_client_request(client_socket, message_handler):
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s [%(levelname)s] %(processName)s - %(message)s",
+        force=True,
+    )
+    logging.info(f"[handle_client_request] START client={message_handler.client_id[:8]}")
     output_queue = middleware.MessageMiddlewareQueueRabbitMQ(MOM_HOST, OUTPUT_QUEUE)
     control_queues = [
         middleware.MessageMiddlewareQueueRabbitMQ(MOM_HOST, q)
         for q in EOF_CONTROL_QUEUES
     ]
 
-    coordinator_client = CoordinatorClient(
-        mom_host=MOM_HOST,
+    coordinator_client = GatewayCoordinatorClient(
         coordinator_queue=COORDINATOR_QUEUE,
+        rabbitmq_host=MOM_HOST,
     )
 
     try:
@@ -77,7 +83,9 @@ def handle_client_request(client_socket, message_handler):
 
     try:
         while True:
+            logging.info("[handle_client_request] waiting message from client")
             message = message_protocol.external.recv_msg(client_socket)
+            logging.info(f"[handle_client_request] message received: {message}")
             logging.info(f"message received: {message}")
             
             if message[0] == message_protocol.external.MsgType.TRANSACTION_RECORD:
@@ -98,7 +106,7 @@ def handle_client_request(client_socket, message_handler):
                 for control_queue in control_queues:
                     control_queue.send(eof_msg.encode('utf-8'))
 
-                coordinator_client.send_client_input_completed(
+                coordinator_client.notify_client_input_completed(
                     client_id=message_handler.client_id,
                     expected_input=transactions_sent,
                 )
@@ -216,41 +224,63 @@ def main():
     with multiprocessing.Manager() as manager:
         client_list = manager.list()
         sigterm_received = manager.Value("c_short", 0)
-        with multiprocessing.Pool(processes=os.process_cpu_count()) as processes_pool:
-            processes_pool.apply_async(handle_client_response, (client_list,))
 
-            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as server_socket:
-                logging.info("Listening to connections")
-                server_socket.bind((SERVER_HOST, SERVER_PORT))
-                server_socket.listen()
-                signal.signal(
-                    signal.SIGTERM,
-                    lambda signum, frame: handle_sigterm(
-                        server_socket, client_list, sigterm_received
-                    ),
-                )
-                while True:
-                    try:
-                        client_socket, _ = server_socket.accept()
+        response_process = multiprocessing.Process(
+            target=handle_client_response,
+            args=(client_list,),
+            daemon=True,
+        )
+        response_process.start()
 
-                        client_id = str(uuid.uuid4())
-                        logging.info(f"A new client has connected: {client_id[:8]}")
-                        message_handler_instance = message_handler.MessageHandler(client_id)
-                        client_list.append([client_id, message_handler_instance, client_socket])
-                        processes_pool.apply_async(
-                            handle_client_request,
-                            (client_socket, message_handler_instance),
-                        )
-                    except socket.error:
-                        if sigterm_received.value == 0:
-                            logging.error("The connection with the client was lost")
-                            return 1
-                        else:
-                            return 0
-                    except Exception as e:
-                        logging.error(e)
-                        return 2
-    return 0
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as server_socket:
+            logging.info("Listening to connections")
+            server_socket.bind((SERVER_HOST, SERVER_PORT))
+            server_socket.listen()
+
+            signal.signal(
+                signal.SIGTERM,
+                lambda signum, frame: handle_sigterm(
+                    server_socket,
+                    client_list,
+                    sigterm_received,
+                ),
+            )
+
+            while True:
+                try:
+                    client_socket, _ = server_socket.accept()
+
+                    client_id = str(uuid.uuid4())
+                    logging.info(f"A new client has connected: {client_id[:8]}")
+
+                    message_handler_instance = message_handler.MessageHandler(client_id)
+
+                    client_list.append([
+                        client_id,
+                        message_handler_instance,
+                        client_socket,
+                    ])
+
+                    client_process = multiprocessing.Process(
+                        target=handle_client_request,
+                        args=(client_socket, message_handler_instance),
+                        daemon=True,
+                    )
+                    client_process.start()
+
+                    # El proceso padre no usa este socket.
+                    # El hijo ya heredó el file descriptor.
+                    client_socket.close()
+
+                except socket.error:
+                    if sigterm_received.value == 0:
+                        logging.error("The connection with the client was lost")
+                        return 1
+                    return 0
+
+                except Exception as e:
+                    logging.error(e)
+                    return 2
 
 
 if __name__ == "__main__":

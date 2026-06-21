@@ -1,4 +1,22 @@
 services:
+
+  client_1:
+    build:
+      context: ./src/
+      dockerfile: client/Dockerfile
+    container_name: client_1
+    depends_on:
+      - gateway
+    environment:
+      - INPUT_FILE=/datasets/HI-Small_Trans.csv
+      - SERVER_HOST=gateway
+      - SERVER_PORT=5678
+      - OUTPUT_FILE_MINOR_RESULT=/output/client_1_minor_result.csv
+    networks:
+      - money_laundering_net
+    volumes:
+      - ./datasets:/datasets
+      - ./output:/output
   gateway:
     build:
       context: ./src/
