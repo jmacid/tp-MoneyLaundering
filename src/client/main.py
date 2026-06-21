@@ -16,6 +16,7 @@ OUTPUT_FILE_SCATTER_GATHER = os.environ.get("OUTPUT_FILE_SCATTER_GATHER", "/outp
 OUTPUT_FILE_AMOUNT_ACCOUNTS = os.environ.get("OUTPUT_FILE_AMOUNT_ACCOUNTS", "/output/amount_accounts.csv")
 
 ROW_LIMIT = 7500 #None
+BATCH_SIZE = int(os.getenv("BATCH_SIZE", "1"))
 
 class Client:
     def __init__(self):
@@ -67,11 +68,13 @@ class Client:
             csv_reader = csv.reader(csvfile, delimiter=",", quotechar='"')
             _header = next(csv_reader)
 
-            for row in islice(csv_reader, ROW_LIMIT):
+            rows = list(islice(csv_reader, ROW_LIMIT))
+            for i in range(0, len(rows), BATCH_SIZE):
+                batch = rows[i:i + BATCH_SIZE]
                 message_protocol.external.send_msg(
                     self.server_socket,
-                    message_protocol.external.MsgType.TRANSACTION_RECORD,
-                    row
+                    message_protocol.external.MsgType.TRANSACTION_BATCH,
+                    batch
                 )
 
                 while True:

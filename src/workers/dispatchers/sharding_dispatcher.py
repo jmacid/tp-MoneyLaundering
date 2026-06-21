@@ -34,8 +34,16 @@ class ShardingDispatcher:
     def process(self, transactions: list[dict[str, Any]]) -> None:
         for transaction in transactions:
             key_value = transaction.get(self.sharding_key_field, "")
-            
             hash_val = int(hashlib.md5(str(key_value).encode('utf-8')).hexdigest(), 16)
             shard_id = hash_val % self.shards_count
-            
             self.middlewares[shard_id].send(json.dumps(transaction))
+
+    def dispatch_batch(self, results: list[dict[str, Any]]) -> None:
+        shards = [[] for _ in range(self.shards_count)]
+        for transaction in results:
+            key_value = transaction.get(self.sharding_key_field, "")
+            hash_val = int(hashlib.md5(str(key_value).encode('utf-8')).hexdigest(), 16)
+            shards[hash_val % self.shards_count].append(transaction)
+        for shard_id, batch in enumerate(shards):
+            if batch:
+                self.middlewares[shard_id].send(json.dumps(batch))

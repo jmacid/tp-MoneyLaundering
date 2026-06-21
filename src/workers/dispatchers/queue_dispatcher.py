@@ -38,3 +38,11 @@ class QueueDispatcher:
 
         for queue, transaction in zip(self.output_queues, transactions):
             self.middlewares[queue].send(json.dumps(transaction))
+
+    def dispatch_batch(self, results: list[dict[str, Any]]) -> None:
+        queue = self.output_queues[0]
+        self.middlewares[queue].send(json.dumps(results))
+
+    def dispatch_fan_out_batch(self, batches_per_queue: list[list[dict[str, Any]]]) -> None:
+        for queue, batch in zip(self.output_queues, batches_per_queue):
+            self.middlewares[queue].send(json.dumps(batch))

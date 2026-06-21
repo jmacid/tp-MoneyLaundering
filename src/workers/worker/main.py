@@ -91,30 +91,52 @@ def main():
 
     logging.info(f"Initialized successfully operation: {os.getenv("OPERATION_TYPE")}")
 
-    def handle_message(transaction):
-        # logging.info("Processing transaction: %s", transaction)
+    def handle_message(message):
+        # EOF signal: ['client-id-string']
+        if isinstance(message, list) and len(message) == 1 and isinstance(message[0], str):
+            client_id = message[0]
+            if isinstance(operation, BankDispatcher):
+                operation.process(message)
+            control_msg = json.dumps({
+                "client_id": client_id,
+                "node": node_name,
+                "processed": 0,
+                "emitted": 0
+            })
+            for control_queue in control_queues:
+                control_queue.send(control_msg.encode('utf-8'))
+            return
 
-        result = operation.process(transaction)
-        if result is not None:
-            logging.info(f"Processed transaction result: {result}")
+        items = message if isinstance(message, list) and message and isinstance(message[0], dict) else [message]
+        client_id = items[0].get("client_id") if items else None
 
-        if result is not None and dispatcher is not None:
-            dispatcher.process([result])
-        if isinstance(operation, ProjectionDispatcher):
-            emitted_count = 1
+        if isinstance(operation, (ProjectionDispatcher, BankDispatcher)):
+            operation.process_batch(items)
+            total_processed = len(items)
+            total_emitted = len(items) if isinstance(operation, ProjectionDispatcher) else 0
         else:
-            emitted_count = 1 if result is not None else 0
+            batch_results = []
+            for transaction in items:
+                result = operation.process(transaction)
+                if result is not None:
+                    logging.info(f"Processed transaction result: {result}")
+                    batch_results.append(result)
 
-        client_id = transaction[0] if isinstance(transaction, list) else transaction.get("client_id")
+            total_processed = len(items)
+            total_emitted = len(batch_results)
 
-        control_msg = json.dumps({
-            "client_id": client_id,
-            "node": node_name,
-            "processed": 1,
-            "emitted": emitted_count
-        })
-        for control_queue in control_queues:
-            control_queue.send(control_msg.encode('utf-8'))
+            if batch_results and dispatcher is not None:
+                dispatcher.dispatch_batch(batch_results)
+
+        if client_id is not None:
+            control_msg = json.dumps({
+                "client_id": client_id,
+                "node": node_name,
+                "processed": total_processed,
+                "emitted": total_emitted
+            })
+            for control_queue in control_queues:
+                control_queue.send(control_msg.encode('utf-8'))
 
     consumer.start(handle_message)
 

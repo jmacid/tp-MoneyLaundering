@@ -23,11 +23,14 @@ class ProjectionDispatcher():
         self.projectors = [projector_q1, projector_q2, projector_q3, projector_q4, projector_q5]
 
     def process(self, transaction: dict[str, Any]) -> None:
-
         projected_transactions: list[dict[str, Any]] = []
-
         for projector in self.projectors:
-            projected_transaction = projector.process(transaction)
-            projected_transactions.append(projected_transaction)
-
+            projected_transactions.append(projector.process(transaction))
         self.dispatcher.process(projected_transactions)
+
+    def process_batch(self, transactions: list[dict[str, Any]]) -> None:
+        batches_per_queue = [[] for _ in self.projectors]
+        for transaction in transactions:
+            for i, projector in enumerate(self.projectors):
+                batches_per_queue[i].append(projector.process(transaction))
+        self.dispatcher.dispatch_fan_out_batch(batches_per_queue)

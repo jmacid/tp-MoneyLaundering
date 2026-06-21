@@ -29,3 +29,7 @@ class BroadcastDispatcher:
         for transaction in transactions:
             for queue in self.output_queues:
                 self.middlewares[queue].send(json.dumps(transaction))
+
+    def dispatch_batch(self, results: list[dict[str, Any]]) -> None:
+        for queue in self.output_queues:
+            self.middlewares[queue].send(json.dumps(results))

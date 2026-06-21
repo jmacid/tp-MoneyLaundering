@@ -75,15 +75,17 @@ class LocalBankMaxAggregator:
     def process_message(self, message, ack, nack):
         try:
             fields = message_protocol.internal.deserialize(message)
-            if isinstance(fields, dict) and "client_id" in fields and "to_bank" in fields:
-                self._process_data(
-                    fields["client_id"], 
-                    fields["to_bank"], 
-                    fields["from_account"], 
-                    float(fields["amount_paid"])
-                )
-            elif isinstance(fields, list) and len(fields) == 1:
-                self._process_eof(fields[0])
+            items = fields if isinstance(fields, list) and fields and isinstance(fields[0], dict) else [fields]
+            for item in items:
+                if isinstance(item, dict) and "client_id" in item and "to_bank" in item:
+                    self._process_data(
+                        item["client_id"],
+                        item["to_bank"],
+                        item["from_account"],
+                        float(item["amount_paid"])
+                    )
+                elif isinstance(item, list) and len(item) == 1:
+                    self._process_eof(item[0])
             ack()
         except Exception as e:
             logging.error(f"Error in LocalBankMaxAggregator: {e}")

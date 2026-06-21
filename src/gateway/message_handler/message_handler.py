@@ -5,10 +5,10 @@ class MessageHandler:
     def __init__(self, client_id: str):
         self.client_id = client_id
     
-    def serialize_data_message(self, message):
+    def build_transaction_dict(self, message):
         [timestamp, from_bank, from_account, to_bank, to_account, amount_received, receiving_currency, amount_paid, payment_currency, payment_format, is_laundering] = message
 
-        transaction_dict = {
+        return {
             "client_id": self.client_id,
             "timestamp": timestamp,
             "from_bank": from_bank,
@@ -23,7 +23,8 @@ class MessageHandler:
             "is_laundering": is_laundering
         }
 
-        return message_protocol.internal.serialize(transaction_dict)
+    def serialize_data_message(self, message):
+        return message_protocol.internal.serialize(self.build_transaction_dict(message))
 
     def serialize_eof_message(self, message):
         return message_protocol.internal.serialize([self.client_id])

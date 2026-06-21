@@ -22,6 +22,7 @@ EOFS_EXPECTED = int(os.getenv("EOFS_EXPECTED", "1"))
 BANKS_CSV_PATH = os.getenv("BANKS_CSV_PATH", "banks.csv")
 RESOLVERS_COUNT = int(os.getenv("RESOLVERS_COUNT", "1"))
 RESOLVER_EXCHANGE = os.getenv("RESOLVER_EXCHANGE", "max_bank_transactions")
+BATCH_SIZE = int(os.getenv("BATCH_SIZE", "1"))
 
 
 def load_bank_mapping(file_path):
@@ -71,11 +72,12 @@ def handle_client_request(client_socket, message_handler):
         while True:
             message = message_protocol.external.recv_msg(client_socket)
             logging.info(f"message received: {message}")
-            
-            if message[0] == message_protocol.external.MsgType.TRANSACTION_RECORD:
-                serialized_message = message_handler.serialize_data_message(message[1])
-                output_queue.send(serialized_message)
-                transactions_sent += 1
+
+            if message[0] == message_protocol.external.MsgType.TRANSACTION_BATCH:
+                batch = message[1]
+                transaction_dicts = [message_handler.build_transaction_dict(row) for row in batch]
+                output_queue.send(message_protocol.internal.serialize(transaction_dicts))
+                transactions_sent += len(batch)
                 message_protocol.external.send_msg(
                     client_socket, message_protocol.external.MsgType.ACK
                 )
@@ -109,11 +111,37 @@ def handle_client_response(client_list):
     eof_counts = {}
     eof_lock = threading.Lock()
 
+    def _send_result(fields, client_list):
+        if not isinstance(fields, dict) or "client_id" not in fields:
+            return
+        target_client_id = fields.pop("client_id")
+        if "query" in fields and fields["query"] == "query_1":
+            msg_type = message_protocol.external.MsgType.MINOR_RESULT
+            fields.pop("query")
+        elif "query" in fields and fields["query"] == "query_2":
+            msg_type = message_protocol.external.MsgType.MAX_PER_BANK
+            fields.pop("query")
+        elif "query" in fields and fields["query"] == "query_3":
+            msg_type = message_protocol.external.MsgType.LOWER_THAN_AVG
+            fields.pop("query")
+        elif "query" in fields and fields["query"] == "query_4":
+            msg_type = message_protocol.external.MsgType.SCATTER_GATHER_ACCOUNTS
+            fields.pop("query")
+        elif "query" in fields and fields["query"] == "query_5":
+            msg_type = message_protocol.external.MsgType.AMOUNT_ACCOUNTS
+            fields.pop("query")
+        else:
+            return
+        for client_data in client_list:
+            if client_data[0] == target_client_id:
+                message_protocol.external.send_msg(client_data[2], msg_type, fields)
+                break
+
     def _consume_result(input_queue, message, ack, nack):
         try:
             fields = message_protocol.internal.deserialize(message)
 
-            if isinstance(fields, list) and len(fields) == 1:
+            if isinstance(fields, list) and len(fields) == 1 and isinstance(fields[0], str):
                 target_client_id = fields[0]
                 with eof_lock:
                     eof_counts[target_client_id] = eof_counts.get(target_client_id, 0) + 1
@@ -139,38 +167,13 @@ def handle_client_response(client_list):
                 ack()
                 return
 
-            if not isinstance(fields, dict) or "client_id" not in fields:
+            if isinstance(fields, list):
+                for item in fields:
+                    _send_result(item, client_list)
                 ack()
                 return
 
-            target_client_id = fields.pop("client_id")
-
-            if "query" in fields and fields["query"] == "query_1":
-                msg_type = message_protocol.external.MsgType.MINOR_RESULT
-                fields.pop("query")
-            elif "query" in fields and fields["query"] == "query_2":
-                msg_type = message_protocol.external.MsgType.MAX_PER_BANK
-                fields.pop("query")
-            elif "query" in fields and fields["query"] == "query_3":
-                msg_type = message_protocol.external.MsgType.LOWER_THAN_AVG
-                fields.pop("query")
-            elif "query" in fields and fields["query"] == "query_4":
-                msg_type = message_protocol.external.MsgType.SCATTER_GATHER_ACCOUNTS
-                fields.pop("query")
-            elif "query" in fields and fields["query"] == "query_5":
-                msg_type = message_protocol.external.MsgType.AMOUNT_ACCOUNTS
-                fields.pop("query")
-
-            for client_data in client_list:
-                if client_data[0] == target_client_id:
-                    target_socket = client_data[2]
-                    message_protocol.external.send_msg(
-                        target_socket,
-                        msg_type,
-                        fields,
-                    )
-                    break
-
+            _send_result(fields, client_list)
             ack()
         except Exception as e:
             logging.error(f"[_consume_result] Error: {e}")

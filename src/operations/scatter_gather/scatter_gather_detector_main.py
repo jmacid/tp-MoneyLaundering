@@ -59,11 +59,13 @@ class ScatterGatherDetectorService:
     def process_data_message(self, message, ack, nack):
         try:
             fields = message_protocol.internal.deserialize(message)
-            logging.info(f"fields: {fields}")
-            if isinstance(fields, dict) and "from_account" in fields and "to_account" in fields:
-                self._process_data(fields)
-            elif isinstance(fields, list) and len(fields) == 1:
-                self._process_eof(fields[0])
+            items = fields if isinstance(fields, list) and fields and isinstance(fields[0], dict) else [fields]
+            for item in items:
+                logging.info(f"fields: {item}")
+                if isinstance(item, dict) and "from_account" in item and "to_account" in item:
+                    self._process_data(item)
+                elif isinstance(item, list) and len(item) == 1:
+                    self._process_eof(item[0])
             ack()
         except Exception as e:
             logging.error(f"Error procesando datos Scatter-Gather: {e}")

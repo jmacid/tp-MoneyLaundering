@@ -13,6 +13,7 @@ services:
     - OUTPUT_FILE_LOWER_THAN_AVG=/output/3_client_1_lower_than_avg.csv
     - OUTPUT_FILE_SCATTER_GATHER=/output/4_client_1_scatter_gather.csv
     - OUTPUT_FILE_AMOUNT_ACCOUNTS=/output/5_client_1_amount_accounts.csv
+    - BATCH_SIZE=1500
     volumes:
     - ./datasets:/datasets
     - ./output:/output

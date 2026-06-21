@@ -26,19 +26,19 @@ class ThresholdEvaluator:
             averages = self.averages_by_client[client_id]
             transactions = self.transactions_by_client.get(client_id, [])
 
+            results = []
             for tx in transactions:
                 fmt = tx.get("payment_format")
                 if not fmt or fmt not in averages:
                     continue
-                
                 avg_data = averages[fmt]
                 avg_value = avg_data["sum"] / avg_data["count"] if avg_data["count"] > 0 else 0
-                
-                amount = float(tx.get("amount_paid", 0))
-
-                if amount < (avg_value / 100):
+                if float(tx.get("amount_paid", 0)) < (avg_value / 100):
                     tx["query"] = "query_3"
-                    self.output_queue.send(message_protocol.internal.serialize(tx))
+                    results.append(tx)
+
+            if results:
+                self.output_queue.send(message_protocol.internal.serialize(results))
 
             logging.info(f"Evaluación terminada para {client_id[:8]}. Enviando EOF a Gateway.")
             self.output_queue.send(message_protocol.internal.serialize([client_id]))
@@ -50,18 +50,20 @@ class ThresholdEvaluator:
     def process_tx_message(self, message, ack, nack):
         try:
             fields = message_protocol.internal.deserialize(message)
-            if isinstance(fields, dict) and "client_id" in fields:
-                client_id = fields["client_id"]
-                with self.lock:
-                    if client_id not in self.transactions_by_client:
-                        self.transactions_by_client[client_id] = []
-                    self.transactions_by_client[client_id].append(fields)
-                    logging.info(f"Guardando TX en RAM. Cliente: {client_id[:8]} | Esperando promedio...")
-            elif isinstance(fields, list) and len(fields) == 1:
-                client_id = fields[0]
-                with self.lock:
-                    self.tx_eof_received.add(client_id)
-                    self._evaluate(client_id)
+            items = fields if isinstance(fields, list) and fields and isinstance(fields[0], dict) else [fields]
+            for item in items:
+                if isinstance(item, dict) and "client_id" in item:
+                    client_id = item["client_id"]
+                    with self.lock:
+                        if client_id not in self.transactions_by_client:
+                            self.transactions_by_client[client_id] = []
+                        self.transactions_by_client[client_id].append(item)
+                        logging.info(f"Guardando TX en RAM. Cliente: {client_id[:8]} | Esperando promedio...")
+                elif isinstance(item, list) and len(item) == 1:
+                    client_id = item[0]
+                    with self.lock:
+                        self.tx_eof_received.add(client_id)
+                        self._evaluate(client_id)
             ack()
         except Exception as e:
             logging.error(f"Error process_tx: {e}")

@@ -34,7 +34,15 @@ up:
 
 up-client:
 	docker compose -f docker-compose-client.yaml build --no-cache
-	docker compose -f docker-compose-client.yaml up
+	@echo "Starting stopwatch..."
+	@start_time=$$(date +%s); \
+	docker compose -f docker-compose-client.yaml up; \
+	end_time=$$(date +%s); \
+	elapsed=$$((end_time - start_time)); \
+	echo "========================================"; \
+	echo "Processing took $$elapsed seconds."; \
+	echo "========================================"
+
 .PHONY: up
 
 down:

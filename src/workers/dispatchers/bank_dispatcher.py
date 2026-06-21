@@ -42,8 +42,19 @@ class BankDispatcher:
         except Exception as e:
             logging.error(f"Error processing message in BankDispatcher: {e}")
             raise e
-
         return None
+
+    def process_batch(self, transactions):
+        shards = [[] for _ in range(AGGREGATORS_COUNT)]
+        for transaction in transactions:
+            bank = transaction.get("to_bank", "")
+            hash_val = int(hashlib.md5(bank.encode('utf-8')).hexdigest(), 16)
+            shards[hash_val % AGGREGATORS_COUNT].append(transaction)
+        for i, batch in enumerate(shards):
+            if batch:
+                self.data_output_exchanges[i].send(
+                    message_protocol.internal.serialize(batch)
+                )
 
     def __del__(self):
         for exchange in self.data_output_exchanges:

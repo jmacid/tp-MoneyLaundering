@@ -77,13 +77,13 @@ class PaymentMethodCounter:
 
     def process_data_messsage(self, message, ack, nack):
         fields = message_protocol.internal.deserialize(message)
-        
-        if isinstance(fields, dict) and "client_id" in fields and "payment_format" in fields:
-            self._process_data(fields)
-        elif isinstance(fields, list) and len(fields) == 1:
-            logging.info(f"EOF detectado en la cola de datos. Retransmitiendo a todas las instancias para {fields[0][:8]}")
-            self.control_exchange_publisher.send(message)
-        
+        items = fields if isinstance(fields, list) and fields and isinstance(fields[0], dict) else [fields]
+        for item in items:
+            if isinstance(item, dict) and "client_id" in item and "payment_format" in item:
+                self._process_data(item)
+            elif isinstance(item, list) and len(item) == 1:
+                logging.info(f"EOF detectado en la cola de datos. Retransmitiendo a todas las instancias para {item[0][:8]}")
+                self.control_exchange_publisher.send(message_protocol.internal.serialize(item))
         ack()
 
     def process_control_message(self, message, ack, nack):
