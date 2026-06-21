@@ -1,5 +1,7 @@
 import os
 import logging
+
+from shared.coordinator_client.coordinator_client import CoordinatorClient
 from workers.consumers.exchange_consumer import ExchangeConsumer
 from workers.consumers.queue_consumer import QueueConsumer
 from workers.dispatchers.exchange_dispatcher import ExchangeDispatcher
@@ -9,34 +11,46 @@ from workers.dispatchers.sharding_dispatcher import ShardingDispatcher
 from operations.core.operation_factory import OperationFactory
 from workers.dispatchers.broadcast_dispatcher import BroadcastDispatcher
 from workers.dispatchers.bank_dispatcher import BankDispatcher
-import json
-from common import middleware
 
-ALLOWED_OPERATIONS = ["currency_filter","amount_filter","date_range_filter","payment_method_filter",
-                      "payment_method_counter","currency_normalizer", "projection_dispatcher","bank_dispatcher",
-                       "destination_filter", "scatter_gather_detector"]
+
+ALLOWED_OPERATIONS = [
+    "currency_filter",
+    "amount_filter",
+    "date_range_filter",
+    "payment_method_filter",
+    "payment_method_counter",
+    "currency_normalizer",
+    "projection_dispatcher",
+    "bank_dispatcher",
+    "destination_filter",
+    "scatter_gather_detector",
+]
 
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s [%(levelname)s] %(message)s",
 )
 
-EOF_CONTROL_QUEUES = [q.strip() for q in os.getenv("EOF_CONTROL_QUEUE", "eof_control_queue").split(",") if q.strip()]
 RABBITMQ_HOST = os.getenv("RABBITMQ_HOST", "rabbitmq")
+
 
 def build_operation():
     operation_type = os.getenv("OPERATION_TYPE")
 
     if operation_type is None:
         raise ValueError("Missing environment variable: OPERATION_TYPE")
-    elif operation_type not in ALLOWED_OPERATIONS:
+
+    if operation_type not in ALLOWED_OPERATIONS:
         raise ValueError(f"Unsupported operation type: {operation_type}")
-    elif operation_type == "projection_dispatcher":
+
+    if operation_type == "projection_dispatcher":
         return ProjectionDispatcher()
-    elif operation_type == "bank_dispatcher":
+
+    if operation_type == "bank_dispatcher":
         return BankDispatcher()
 
     return OperationFactory.create(operation_type)
+
 
 def initialize_dispatcher():
     middleware_type = os.getenv("OUTPUT_MIDDLEWARE_TYPE", "queue")
@@ -56,9 +70,8 @@ def initialize_dispatcher():
     if middleware_type == "broadcast":
         return BroadcastDispatcher()
 
-    raise ValueError(
-        f"Unsupported OUTPUT_MIDDLEWARE_TYPE: {middleware_type}"
-    )
+    raise ValueError(f"Unsupported OUTPUT_MIDDLEWARE_TYPE: {middleware_type}")
+
 
 def initialize_consumer():
     middleware_type = os.getenv("INPUT_MIDDLEWARE_TYPE", "queue")
@@ -69,54 +82,144 @@ def initialize_consumer():
     if middleware_type == "exchange":
         return ExchangeConsumer()
 
-    raise ValueError(
-        f"Unsupported OUTPUT_MIDDLEWARE_TYPE: {middleware_type}"
+    raise ValueError(f"Unsupported INPUT_MIDDLEWARE_TYPE: {middleware_type}")
+
+
+def is_eof_message(message) -> bool:
+    """
+    Adaptar según el formato real de EOF que estés usando.
+
+    Ejemplos soportados:
+    - {"type": "EOF", "client_id": "..."}
+    - {"event": "EOF", "client_id": "..."}
+    - ["client_1", "EOF"]
+    """
+
+    if isinstance(message, dict):
+        return message.get("type") == "EOF" or message.get("event") == "EOF"
+
+    if isinstance(message, list):
+        return len(message) >= 2 and message[1] == "EOF"
+
+    return False
+
+
+def get_client_id(message) -> str:
+    """
+    Adaptar según tu formato real de transacción.
+
+    Por lo que tenías antes:
+    - si es list, client_id = transaction[0]
+    - si es dict, client_id = transaction["client_id"]
+    """
+
+    if isinstance(message, list):
+        return message[0]
+
+    if isinstance(message, dict):
+        client_id = message.get("client_id")
+
+        if client_id is None:
+            raise ValueError(f"Missing client_id in message: {message}")
+
+        return client_id
+
+    raise ValueError(f"Unsupported message format: {message}")
+
+
+def get_node_id() -> str:
+
+    return (
+        os.getenv("NODE_ID")
+        or os.getenv("NODE_NAME")
+        or os.getenv("OPERATION_TYPE")
     )
 
-def operation_handles_dispatch(operation) -> bool:
-    return isinstance(operation, ProjectionDispatcher)
 
 def main():
-
     operation = build_operation()
     dispatcher = initialize_dispatcher()
     consumer = initialize_consumer()
 
-    control_queues = [
-        middleware.MessageMiddlewareQueueRabbitMQ(RABBITMQ_HOST, q)
-        for q in EOF_CONTROL_QUEUES
-    ]
+    operation_type = os.getenv("OPERATION_TYPE")
 
-    node_name = os.getenv("NODE_NAME", os.getenv("OPERATION_TYPE"))
+    node_id = get_node_id()
+    rule_id = os.getenv("RULE_ID")
+    stage_id = os.getenv("STAGE_ID", operation_type)
+    next_stage_id = os.getenv("NEXT_STAGE_ID")
 
-    logging.info(f"Initialized successfully operation: {os.getenv("OPERATION_TYPE")}")
+    if node_id is None:
+        raise ValueError("Missing NODE_ID/NODE_NAME/OPERATION_TYPE")
 
-    def handle_message(transaction):
-        # logging.info("Processing transaction: %s", transaction)
+    if rule_id is None:
+        raise ValueError("Missing environment variable: RULE_ID")
 
-        result = operation.process(transaction)
+    coordinator = CoordinatorClient(
+        node_id=node_id,
+        rule_id=rule_id,
+        stage_id=stage_id,
+        next_stage_id=next_stage_id,
+        rabbitmq_host=RABBITMQ_HOST,
+    )
+
+    coordinator.start()
+
+    registered = coordinator.wait_until_registered(timeout=10)
+
+    if not registered:
+        raise RuntimeError("Coordinator did not send WELCOME. Worker will not start processing.")
+
+    logging.info(
+        "Initialized worker successfully. operation=%s node_id=%s rule_id=%s stage_id=%s next_stage_id=%s",
+        operation_type,
+        node_id,
+        rule_id,
+        stage_id,
+        next_stage_id,
+    )
+
+    def handle_message(message):
+        client_id = get_client_id(message)
+
+        if is_eof_message(message):
+            logging.info(
+                "EOF detected. client_id=%s node_id=%s stage_id=%s",
+                client_id,
+                node_id,
+                stage_id,
+            )
+
+            coordinator.notify_eof_detected(client_id)
+            return
+
+        coordinator.record_processed(client_id)
+
+        result = operation.process(message)
+
         if result is not None:
-            logging.info(f"Processed transaction result: {result}")
+            logging.info("Processed transaction result: %s", result)
+
+        emitted_count = 0
 
         if result is not None and dispatcher is not None:
             dispatcher.process([result])
-        if isinstance(operation, ProjectionDispatcher):
             emitted_count = 1
-        else:
-            emitted_count = 1 if result is not None else 0
 
-        client_id = transaction[0] if isinstance(transaction, list) else transaction.get("client_id")
+        elif isinstance(operation, ProjectionDispatcher):
+            # Ojo: este caso depende de cómo esté implementado ProjectionDispatcher.
+            # Si ProjectionDispatcher ya despacha internamente y no devuelve result,
+            # entonces el emitted debería salir de la propia operación.
+            emitted_count = 1
 
-        control_msg = json.dumps({
-            "client_id": client_id,
-            "node": node_name,
-            "processed": 1,
-            "emitted": emitted_count
-        })
-        for control_queue in control_queues:
-            control_queue.send(control_msg.encode('utf-8'))
+        if emitted_count > 0:
+            coordinator.record_emitted(client_id, emitted_count)
 
-    consumer.start(handle_message)
+    try:
+        consumer.start(handle_message)
+
+    finally:
+        coordinator.stop()
+
 
 if __name__ == "__main__":
     main()
