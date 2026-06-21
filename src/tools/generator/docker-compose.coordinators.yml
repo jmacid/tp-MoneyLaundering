@@ -3,19 +3,22 @@ services:
     image: rabbitmq:3-management
     container_name: rabbitmq
     ports:
-      - "5672:5672"
-      - "15672:15672"
+      - 5672:5672
+      - 15672:15672
     environment:
       RABBITMQ_DEFAULT_USER: guest
       RABBITMQ_DEFAULT_PASS: guest
     healthcheck:
-      test: ["CMD", "rabbitmq-diagnostics", "-q", "check_port_connectivity"]
+      test:
+        - CMD
+        - rabbitmq-diagnostics
+        - -q
+        - check_port_connectivity
       interval: 5s
       timeout: 5s
       retries: 10
     networks:
       - money_laundering_net
-
   coordinator:
     build:
       context: ../..
@@ -60,12 +63,30 @@ services:
     volumes:
       - coordinator_data:/app/data
     restart: unless-stopped
-
+  coordinator_3:
+    build:
+      context: ../..
+      dockerfile: coordinator/base/Dockerfile
+    container_name: coordinator_3
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    environment:
+      PYTHONPATH: /app
+      RABBITMQ_HOST: rabbitmq
+      COORDINATOR_QUEUE: coordinator_control_queue
+      REPORT_RETRY_SECONDS: 5
+      NODE_TIMEOUT_SECONDS: 9999
+      MONITOR_INTERVAL_SECONDS: 9999
+      STATE_DB_PATH: /app/data/state.db
+      COORDINATOR_ID: 3
+    networks:
+      - money_laundering_net
+    volumes:
+      - coordinator_data:/app/data
+    restart: unless-stopped
 volumes:
   coordinator_data:
-
-
-
 networks:
   money_laundering_net:
     external: true

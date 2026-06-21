@@ -10,6 +10,8 @@ import uuid
 import json
 import csv
 
+from shared.coordinator_client.coordinator_client import CoordinatorClient
+
 SERVER_HOST = os.environ["SERVER_HOST"]
 SERVER_PORT = int(os.environ["SERVER_PORT"])
 
@@ -22,6 +24,7 @@ EOFS_EXPECTED = int(os.getenv("EOFS_EXPECTED", "1"))
 BANKS_CSV_PATH = os.getenv("BANKS_CSV_PATH", "banks.csv")
 RESOLVERS_COUNT = int(os.getenv("RESOLVERS_COUNT", "1"))
 RESOLVER_EXCHANGE = os.getenv("RESOLVER_EXCHANGE", "max_bank_transactions")
+COORDINATOR_QUEUE = os.getenv("COORDINATOR_QUEUE", "coordinator_control_queue")
 
 
 def load_bank_mapping(file_path):
@@ -48,6 +51,11 @@ def handle_client_request(client_socket, message_handler):
         middleware.MessageMiddlewareQueueRabbitMQ(MOM_HOST, q)
         for q in EOF_CONTROL_QUEUES
     ]
+
+    coordinator_client = CoordinatorClient(
+        mom_host=MOM_HOST,
+        coordinator_queue=COORDINATOR_QUEUE,
+    )
 
     try:
         bank_map = load_bank_mapping(BANKS_CSV_PATH)
@@ -89,6 +97,11 @@ def handle_client_request(client_socket, message_handler):
                 })
                 for control_queue in control_queues:
                     control_queue.send(eof_msg.encode('utf-8'))
+
+                coordinator_client.send_client_input_completed(
+                    client_id=message_handler.client_id,
+                    expected_input=transactions_sent,
+                )
 
                 message_protocol.external.send_msg(
                     client_socket, message_protocol.external.MsgType.ACK

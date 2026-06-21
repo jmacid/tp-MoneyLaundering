@@ -1,27 +1,24 @@
 services:
-  rabbitmq:
-    image: rabbitmq:3-management
-    container_name: rabbitmq
-    ports:
-      - "5672:5672"
-      - "15672:15672"
+  gateway:
+    build:
+      context: ./src/
+      dockerfile: gateway/Dockerfile
+    container_name: gateway
     environment:
-      RABBITMQ_DEFAULT_USER: guest
-      RABBITMQ_DEFAULT_PASS: guest
-    healthcheck:
-      test: ["CMD", "rabbitmq-diagnostics", "-q", "check_port_connectivity"]
-      interval: 5s
-      timeout: 5s
-      retries: 10
-  
+      - INPUT_QUEUE=minor_transactions
+      - MOM_HOST=rabbitmq
+      - OUTPUT_QUEUE=transactions
+      - PYTHONUNBUFFERED=1
+      - SERVER_HOST=gateway
+      - SERVER_PORT=5678
+      - EOF_CONTROL_QUEUE=eof_control_queue_1
+    networks:
+      - money_laundering_net
   date_range_filter_r1_1:
     build:
       context: ./src/
       dockerfile: workers/worker/Dockerfile
     container_name: date_range_filter_r1_1
-    depends_on:
-      rabbitmq:
-        condition: service_healthy
     environment:
       - RABBITMQ_HOST=rabbitmq
       - NODE_ID=3
@@ -34,15 +31,14 @@ services:
       - START_DATE=2022-09-01T00:15:00
       - END_DATE=2022-09-01T00:30:00
       - EOF_CONTROL_QUEUE=eof_control_queue_1
+    networks:
+      - money_laundering_net
       
   amount_filter_r1_1:
     build:
       context: ./src/
       dockerfile: workers/worker/Dockerfile
     container_name: amount_filter_r1_1
-    depends_on:
-      rabbitmq:
-        condition: service_healthy
     environment:
       - RABBITMQ_HOST=rabbitmq
       - NODE_ID=4
@@ -54,47 +50,10 @@ services:
       - OUTPUTS=minor_transactions
       - MINIMUM_AMOUNT=50
       - EOF_CONTROL_QUEUE=eof_control_queue_1
+    networks:
+      - money_laundering_net
 
-  coordinator:
-    build:
-      context: ./src/
-      dockerfile: coordinator/base/Dockerfile
-    container_name: coordinator
-    depends_on:
-      rabbitmq:
-        condition: service_healthy
-    environment:
-      PYTHONPATH: /app
-      RABBITMQ_HOST: rabbitmq
-      COORDINATOR_QUEUE: coordinator_control_queue
-      REPORT_RETRY_SECONDS: 5
-      NODE_TIMEOUT_SECONDS: 9999
-      MONITOR_INTERVAL_SECONDS: 9999
-      STATE_DB_PATH: /app/data/state.db
-      COORDINATOR_ID: 1
-    volumes:
-      - coordinator_data:/app/data
-    restart: unless-stopped
-  coordinator_2:
-    build:
-      context: ./src/
-      dockerfile: coordinator/base/Dockerfile
-    container_name: coordinator_2
-    depends_on:
-      rabbitmq:
-        condition: service_healthy
-    environment:
-      PYTHONPATH: /app
-      RABBITMQ_HOST: rabbitmq
-      COORDINATOR_QUEUE: coordinator_control_queue
-      REPORT_RETRY_SECONDS: 5
-      NODE_TIMEOUT_SECONDS: 9999
-      MONITOR_INTERVAL_SECONDS: 9999
-      STATE_DB_PATH: /app/data/state.db
-      COORDINATOR_ID: 2
-    volumes:
-      - coordinator_data:/app/data
-    restart: unless-stopped
+networks:
+  money_laundering_net:
+    external: true 
 
-volumes:
-  coordinator_data:
