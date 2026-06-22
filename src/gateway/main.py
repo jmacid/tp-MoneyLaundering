@@ -111,6 +111,9 @@ def handle_client_request(client_socket, message_handler):
                     expected_input=transactions_sent,
                 )
 
+                eof_marker = json.dumps({"event": "EOF", "client_id": message_handler.client_id})
+                output_queue.send(eof_marker.encode('utf-8'))
+
                 message_protocol.external.send_msg(
                     client_socket, message_protocol.external.MsgType.ACK
                 )
@@ -123,6 +126,7 @@ def handle_client_request(client_socket, message_handler):
         output_queue.close()
         for control_queue in control_queues:
             control_queue.close()
+        coordinator_client.close()
 
 
 def handle_client_response(client_list):
@@ -133,6 +137,9 @@ def handle_client_response(client_list):
     def _consume_result(input_queue, message, ack, nack):
         try:
             fields = message_protocol.internal.deserialize(message)
+
+            if isinstance(fields, dict) and fields.get("event") == "EOF":
+                fields = [fields["client_id"]]
 
             if isinstance(fields, list) and len(fields) == 1:
                 target_client_id = fields[0]
@@ -165,6 +172,7 @@ def handle_client_response(client_list):
                 return
 
             target_client_id = fields.pop("client_id")
+            msg_type = None
 
             if "query" in fields and fields["query"] == "query_1":
                 msg_type = message_protocol.external.MsgType.MINOR_RESULT
@@ -181,6 +189,10 @@ def handle_client_response(client_list):
             elif "query" in fields and fields["query"] == "query_5":
                 msg_type = message_protocol.external.MsgType.AMOUNT_ACCOUNTS
                 fields.pop("query")
+
+            if msg_type is None:
+                ack()
+                return
 
             for client_data in client_list:
                 if client_data[0] == target_client_id:

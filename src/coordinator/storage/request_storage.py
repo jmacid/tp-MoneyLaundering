@@ -357,12 +357,11 @@ class RequestStorage:
             created_at=float(row["created_at"]),
         )
 
-    @classmethod
-    def _rows_to_requests(cls, rows: list[sqlite3.Row]) -> dict[str, Request]:
+    def _rows_to_requests(self, rows: list[sqlite3.Row]) -> dict[str, Request]:
         requests: dict[str, Request] = {}
 
         for row in rows:
-            request = cls._row_to_request(row)
+            request = self._row_to_request(row)
             if request is not None:
                 requests[request.request_id] = request
 

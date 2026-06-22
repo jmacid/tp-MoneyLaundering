@@ -31,3 +31,6 @@ class ProjectionDispatcher():
             projected_transactions.append(projected_transaction)
 
         self.dispatcher.process(projected_transactions)
+
+    def send_raw(self, body: bytes) -> None:
+        self.dispatcher.send_raw(body)

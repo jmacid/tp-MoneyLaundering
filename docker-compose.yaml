@@ -42,8 +42,9 @@ services:
       - NODE_ID=3
       - RULE_ID=1
       - OPERATION_TYPE=date_range_filter
+      - NEXT_STAGE_ID=amount_filter
       - INPUT_MIDDLEWARE_TYPE=queue
-      - INPUT_QUEUE=USD_transactions
+      - INPUT_QUEUE=transactions
       - OUTPUT_MIDDLEWARE_TYPE=queue
       - OUTPUTS=range_transactions
       - START_DATE=2022-09-01T00:15:00

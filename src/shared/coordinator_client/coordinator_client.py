@@ -171,7 +171,7 @@ class CoordinatorClient:
 
         self._enqueue_event(
             {
-                "event": "EOF_DETECTED",
+                "event": "STAGE_EOF_DETECTED",
                 "client_id": client_id,
                 "rule_id": self.rule_id,
                 "stage_id": self.stage_id,

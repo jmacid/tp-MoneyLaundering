@@ -29,3 +29,10 @@ class BroadcastDispatcher:
         for transaction in transactions:
             for queue in self.output_queues:
                 self.middlewares[queue].send(json.dumps(transaction))
+
+    def send_raw(self, body: bytes) -> None:
+        host = os.getenv("RABBITMQ_HOST", "rabbitmq")
+        for queue in self.output_queues:
+            conn = middleware.MessageMiddlewareQueueRabbitMQ(host=host, queue_name=queue)
+            conn.send(body)
+            conn.close()

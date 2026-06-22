@@ -72,6 +72,7 @@ class Coordinator:
         self.requests = RequestStorage(os.getenv("STATE_DB_PATH", "/app/data/state.db"))
         self.reports = ReportStorage(os.getenv("STATE_DB_PATH", "/app/data/state.db"))
         self.client_inputs = ClientInputStorage(os.getenv("STATE_DB_PATH", "/app/data/state.db"))
+        self._pending_eof_detections: dict[str, list[StageEofDetectedMessage]] = {}
 
     def request_shutdown(self, signum, frame) -> None:
         logger.info("Shutdown signal received | signal=%s", signum)
@@ -186,6 +187,11 @@ class Coordinator:
         logger.info("%s stage received for client_id=%s expected_input=%s", green("[CLIENT_INPUT_COMPLETED]"), message.client_id, message.expected_input)
         self.client_inputs.save(ClientInput(client_id=message.client_id, expected_input=message.expected_input))
 
+        pending = self._pending_eof_detections.pop(message.client_id, [])
+        for deferred in pending:
+            logger.info("%s replaying deferred STAGE_EOF_DETECTED for client_id=%s rule_id=%s stage_id=%s", yellow("[DEFERRED_EOF_REPLAY]"), deferred.client_id, deferred.rule_id, deferred.stage_id)
+            self.handle_stage_eof_detected(deferred)
+
     def handle_stage_eof_detected(self, message: StageEofDetectedMessage) -> None:
         """Create an EOF coordination request when a stage reaches EOF."""
 
@@ -198,7 +204,8 @@ class Coordinator:
             expected_input = stage.expected_input
 
         if expected_input is None:
-            logging.warning("%s client_id=%s rule_id=%s stage_id=%s reason=expected_input_not_found", red("[EOF_DETECTED_IGNORED]"), message.client_id, message.rule_id, message.stage_id)
+            logger.info("%s client_id=%s rule_id=%s stage_id=%s reason=awaiting_client_input_completed", yellow("[EOF_DETECTED_DEFERRED]"), message.client_id, message.rule_id, message.stage_id)
+            self._pending_eof_detections.setdefault(message.client_id, []).append(message)
             return
 
         stage = Stage(client_id=message.client_id, rule_id=message.rule_id, stage_id=message.stage_id, expected_input=expected_input)

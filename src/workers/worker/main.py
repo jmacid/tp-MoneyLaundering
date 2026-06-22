@@ -1,3 +1,4 @@
+import json
 import os
 import logging
 
@@ -154,12 +155,20 @@ def main():
     if rule_id is None:
         raise ValueError("Missing environment variable: RULE_ID")
 
+    def on_release_client(client_id: str) -> None:
+        if dispatcher is None:
+            return
+        eof_marker = json.dumps({"event": "EOF", "client_id": client_id})
+        dispatcher.send_raw(eof_marker.encode("utf-8"))
+        logging.info("Forwarded EOF downstream. client_id=%s node_id=%s stage_id=%s", client_id, node_id, stage_id)
+
     coordinator = CoordinatorClient(
         node_id=node_id,
         rule_id=rule_id,
         stage_id=stage_id,
         next_stage_id=next_stage_id,
         rabbitmq_host=RABBITMQ_HOST,
+        on_release_client=on_release_client,
     )
 
     coordinator.start()
