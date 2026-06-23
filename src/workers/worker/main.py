@@ -210,15 +210,27 @@ def main():
 
         emitted_count = 0
 
-        if result is not None and dispatcher is not None:
-            dispatcher.process([result])
-            emitted_count = 1
+        if isinstance(operation, BankDispatcher):
+            result = operation.process(message)
+
+            if result:
+                emitted_count = 1
 
         elif isinstance(operation, ProjectionDispatcher):
-            # Ojo: este caso depende de cómo esté implementado ProjectionDispatcher.
-            # Si ProjectionDispatcher ya despacha internamente y no devuelve result,
-            # entonces el emitted debería salir de la propia operación.
-            emitted_count = 1
+            result = operation.process(message)
+
+            if result is not None:
+                emitted_count = 1
+
+        else:
+            result = operation.process(message)
+
+            if result is not None:
+                logging.info("Processed transaction result: %s", result)
+
+            if result is not None and dispatcher is not None:
+                dispatcher.process([result])
+                emitted_count = 1
 
         if emitted_count > 0:
             coordinator.record_emitted(client_id, emitted_count)

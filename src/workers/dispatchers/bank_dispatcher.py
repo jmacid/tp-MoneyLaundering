@@ -43,7 +43,7 @@ class BankDispatcher:
             logging.error(f"Error processing message in BankDispatcher: {e}")
             raise e
 
-        return None
+        return 0
 
     def __del__(self):
         for exchange in self.data_output_exchanges:

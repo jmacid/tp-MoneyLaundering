@@ -113,7 +113,7 @@ class Client:
         logging.info("[receive_results] Waiting for processed results....")
         while not self.closed:
             msg_type, msg_payload = message_protocol.external.recv_msg(self.server_socket)
-
+            logging.info(f"[receive_results] msg_type={msg_type}")
             if msg_type == message_protocol.external.MsgType.MINOR_RESULT:
                 self._save_minor_result(msg_payload)
             elif msg_type == message_protocol.external.MsgType.MAX_PER_BANK:
@@ -213,9 +213,9 @@ def main() -> int:
         client.connect(SERVER_HOST, SERVER_PORT)
         client.send_transaction_records(INPUT_FILE)
         client.receive_results()
-    except socket.error:
+    except socket.error as e:
         if not client.closed:
-            logging.error("The connection with the server was lost")
+            logging.exception(f"The connection with the server was lost: {e}")
             return 1
     except Exception as e:
         logging.error(e)

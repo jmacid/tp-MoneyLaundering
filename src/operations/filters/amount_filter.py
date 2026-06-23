@@ -20,7 +20,7 @@ class AmountFilter(OperationStrategy):
         self.required_fields = [self.amount_field]
 
     def process(self, transaction: dict[str, Any]) -> dict[str, Any] | None:
-
+        
         TransactionValidator.validate_required_fields(transaction, self.required_fields)
 
         logging.info(f"transaction amount_paid: {transaction[self.amount_field]} - {self.minimum_amount}")

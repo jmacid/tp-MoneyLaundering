@@ -142,5 +142,6 @@ def main() -> None:
 
 # python3 make_coordinator_compose.py -c 3 -o docker-compose.coordinators.yml
 # docker compose -f docker-compose.coordinators.yml up --build
+# docker compose -f docker-compose.coordinators.yml down -v
 if __name__ == "__main__":
     main()
