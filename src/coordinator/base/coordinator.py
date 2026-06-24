@@ -199,6 +199,13 @@ class Coordinator:
         stage = self.stages.get(message.client_id, message.rule_id, message.stage_id)
 
         if stage is None:
+            # Only use client_inputs fallback for the first pipeline stage (no upstream stage writes expected_input for it)
+            has_upstream = self.nodes.has_stage_as_next_stage(message.rule_id, message.stage_id)
+            if has_upstream:
+                # Upstream stage hasn't closed yet — defer until create_next_stage_if_needed writes the stage record
+                logger.info("%s client_id=%s rule_id=%s stage_id=%s reason=awaiting_upstream_stage", yellow("[EOF_DETECTED_DEFERRED]"), message.client_id, message.rule_id, message.stage_id)
+                self._pending_eof_detections.setdefault(message.client_id, []).append(message)
+                return
             expected_input = self.client_inputs.get_expected_input(message.client_id)
         else:
             expected_input = stage.expected_input
@@ -280,7 +287,6 @@ class Coordinator:
     def try_close_request(self, request_id: str) -> None:
         """Close an EOF request if all expected reports have been received."""
 
-        logging.warning("%s request_id=%s reason=request_not_found", yellow("Trying to close request"), request_id)
         request = self.requests.get(request_id)
 
         if request is None:
@@ -319,8 +325,10 @@ class Coordinator:
 
         total_emitted = sum(report.emitted for report in reports.values())
 
-        self.release_client(claimed_request)
+        # Create next stage record BEFORE releasing client so that when downstream
+        # workers forward EOF and STAGE_EOF_DETECTED arrives, the stage record exists.
         self.create_next_stage_if_needed(claimed_request, total_emitted)
+        self.release_client(claimed_request)
 
         self.requests.mark_closed(request_id)
 
@@ -347,8 +355,23 @@ class Coordinator:
         self.stages.save(next_stage)
         logger.info("%s client_id=%s rule_id=%s stage_id=%s expected_input=%s", cyan("[NEXT_STAGE_CREATED]"), next_stage.client_id, next_stage.rule_id, next_stage.stage_id, next_stage.expected_input)
 
+        # Replay any deferred STAGE_EOF_DETECTED messages waiting for this stage record
+        pending = self._pending_eof_detections.get(request.client_id, [])
+        replayed = []
+        remaining = []
+        for deferred in pending:
+            if deferred.rule_id == next_stage.rule_id and deferred.stage_id == next_stage.stage_id:
+                replayed.append(deferred)
+            else:
+                remaining.append(deferred)
+        if replayed:
+            self._pending_eof_detections[request.client_id] = remaining
+            for deferred in replayed:
+                logger.info("%s replaying deferred STAGE_EOF_DETECTED client_id=%s rule_id=%s stage_id=%s", yellow("[DEFERRED_EOF_REPLAY]"), deferred.client_id, deferred.rule_id, deferred.stage_id)
+                self.handle_stage_eof_detected(deferred)
+
     def request_retry_loop(self) -> None:
-        """Retry EOF report requests for WAITING requests."""
+        """Retry EOF report requests for WAITING requests, and catch deferred stage detections."""
 
         while not self.stop_event.is_set():
             try:
@@ -357,10 +380,30 @@ class Coordinator:
                 for request in waiting_requests.values():
                     self.retry_request_if_needed(request)
 
+                # Replay in-memory deferred detections whose stage record was written by another coordinator
+                self.replay_deferred_if_stage_ready()
+
             except Exception:
                 logging.exception("[REQUEST_RETRY_LOOP] unexpected error")
 
             self.stop_event.wait(MONITOR_INTERVAL_SECONDS)
+
+    def replay_deferred_if_stage_ready(self) -> None:
+        """Replay deferred STAGE_EOF_DETECTED messages whose stage record is now available."""
+
+        for client_id, deferred_list in list(self._pending_eof_detections.items()):
+            still_pending = []
+            for msg in deferred_list:
+                stage = self.stages.get(msg.client_id, msg.rule_id, msg.stage_id)
+                if stage is not None:
+                    logger.info("%s replaying deferred client_id=%s rule_id=%s stage_id=%s", yellow("[DEFERRED_EOF_REPLAY]"), msg.client_id, msg.rule_id, msg.stage_id)
+                    self.handle_stage_eof_detected(msg)
+                else:
+                    still_pending.append(msg)
+            if still_pending:
+                self._pending_eof_detections[client_id] = still_pending
+            else:
+                self._pending_eof_detections.pop(client_id, None)
 
     def retry_request_if_needed(self, request: Request) -> None:
         """Send EOF report request to nodes that have not reported yet."""
@@ -375,7 +418,30 @@ class Coordinator:
         missing_nodes = request.expected_nodes - reported_nodes
 
         if not missing_nodes:
-            self.try_close_request(request.request_id)
+            # All nodes reported but counts still don't match.
+            total_processed = sum(r.processed for r in reports.values())
+
+            # If every worker reported 0, they were already released (counters cleared). Abandon.
+            if total_processed == 0 and request.expected_input > 0:
+                logging.warning(
+                    "[EOF_REQUEST_ABANDONED] request_id=%s reason=all_workers_report_zero_stale_request",
+                    request.request_id,
+                )
+                self.requests.update_status(request.request_id, "CLOSED")
+                return
+
+            # Re-request from all active nodes.
+            active_nodes = self.nodes.find_by_stage(rule_id=request.rule_id, stage_id=request.stage_id, status="ACTIVE")
+            if active_nodes:
+                self.send_eof_report_request(request, active_nodes)
+                request.retry_count += 1
+                request.last_retry_at = now
+                self.requests.save(request)
+                logger.info(
+                    "[EOF_REQUEST_REFRESHED] request_id=%s retry_count=%s reason=counts_mismatch",
+                    request.request_id,
+                    request.retry_count,
+                )
             return
 
         active_nodes = self.nodes.find_by_stage(rule_id=request.rule_id, stage_id=request.stage_id, status="ACTIVE")

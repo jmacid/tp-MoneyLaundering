@@ -10,6 +10,7 @@ from workers.dispatchers.projection_dispatcher import ProjectionDispatcher
 from workers.dispatchers.queue_dispatcher import QueueDispatcher
 from workers.dispatchers.sharding_dispatcher import ShardingDispatcher
 from operations.core.operation_factory import OperationFactory
+from operations.scatter_gather.scatter_gather_detector import ScatterGatherDetector
 from workers.dispatchers.broadcast_dispatcher import BroadcastDispatcher
 from workers.dispatchers.bank_dispatcher import BankDispatcher
 
@@ -158,6 +159,13 @@ def main():
     def on_release_client(client_id: str) -> None:
         if dispatcher is None:
             return
+
+        if isinstance(operation, ScatterGatherDetector):
+            results = operation.flush(client_id)
+            for result in results:
+                dispatcher.process([result])
+                logging.info("Emitted scatter-gather result. client_id=%s", client_id)
+
         eof_marker = json.dumps({"event": "EOF", "client_id": client_id})
         dispatcher.send_raw(eof_marker.encode("utf-8"))
         logging.info("Forwarded EOF downstream. client_id=%s node_id=%s stage_id=%s", client_id, node_id, stage_id)
@@ -203,24 +211,19 @@ def main():
 
         coordinator.record_processed(client_id)
 
-        result = operation.process(message)
-
-        if result is not None:
-            logging.info("Processed transaction result: %s", result)
-
         emitted_count = 0
 
         if isinstance(operation, BankDispatcher):
-            result = operation.process(message)
-
-            if result:
-                emitted_count = 1
+            operation.process(message)
+            emitted_count = 1
 
         elif isinstance(operation, ProjectionDispatcher):
-            result = operation.process(message)
+            operation.process(message)
+            emitted_count = 1
 
-            if result is not None:
-                emitted_count = 1
+        elif isinstance(operation, ScatterGatherDetector):
+            operation.process(message)
+            # results emitted at release time via on_release_client/flush()
 
         else:
             result = operation.process(message)

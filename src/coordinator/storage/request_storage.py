@@ -18,8 +18,10 @@ class RequestStorage:
         self.db_path = db_path
         Path(db_path).parent.mkdir(parents=True, exist_ok=True)
 
-        self.connection = sqlite3.connect(db_path, check_same_thread=False)
+        self.connection = sqlite3.connect(db_path, check_same_thread=False, timeout=5, isolation_level=None)
         self.connection.row_factory = sqlite3.Row
+        self.connection.execute("PRAGMA journal_mode=WAL")
+        self.connection.execute("PRAGMA busy_timeout=5000")
 
         self.create_tables()
         logging.debug("[RequestStorage] Initialized | db_path=%s", db_path)

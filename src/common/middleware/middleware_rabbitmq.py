@@ -27,6 +27,7 @@ class MessageMiddlewareQueueRabbitMQ(MessageMiddlewareQueue):
                 ch.basic_nack(delivery_tag=method.delivery_tag)
             callback(body, ack, nack)
 
+        self.ch.basic_qos(prefetch_count=1)
         self.ch.basic_consume(queue=self.queue_name,
                         auto_ack=False,
                         on_message_callback=pika_callbackdef)

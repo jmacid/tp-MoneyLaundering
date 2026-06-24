@@ -18,8 +18,10 @@ class NodeStorage:
         self.db_path = db_path
         Path(db_path).parent.mkdir(parents=True, exist_ok=True)
 
-        self.connection = sqlite3.connect(db_path, check_same_thread=False)
+        self.connection = sqlite3.connect(db_path, check_same_thread=False, timeout=5, isolation_level=None)
         self.connection.row_factory = sqlite3.Row
+        self.connection.execute("PRAGMA journal_mode=WAL")
+        self.connection.execute("PRAGMA busy_timeout=5000")
 
         self.create_tables()
         logging.debug("[NodeStorage] Initialized | db_path=%s", db_path)
@@ -172,6 +174,18 @@ class NodeStorage:
         ).fetchone()
 
         return None if row is None else row["next_stage_id"]
+
+    def has_stage_as_next_stage(self, rule_id: str, stage_id: str) -> bool:
+        """Return True if any node in this rule points to stage_id as its next stage."""
+        row = self.connection.execute(
+            """
+            SELECT 1 FROM nodes
+            WHERE rule_id = ? AND next_stage_id = ?
+            LIMIT 1
+            """,
+            (rule_id, stage_id),
+        ).fetchone()
+        return row is not None
 
     def delete(self, node_id: str) -> None:
         with self.connection:
